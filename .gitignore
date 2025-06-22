@@ -1,0 +1,10 @@
+.idea/
+.ipynb_checkpoints/
+__pycache__/
+.DS_Store
+wandb/
+logs/
+outputs/
+datasets
+*.pt
+*.gz

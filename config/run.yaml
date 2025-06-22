@@ -1,0 +1,33 @@
+#defaults:
+#  - default_exp
+#  - default_backbone
+#  - default_finetune
+#  - _self_
+#  # If you want your primary config to override the values of configs from the Defaults List,
+#  # append _self_ to the end of the Defaults List.
+
+wandb:
+  project: default
+  name: ''
+  enable: False
+
+train:
+  datapath: ./datasets/maxcut_er_50_0.1
+  debug: true
+  runs: 1
+  ckpt: false
+  lr: 1.e-3
+  weight_decay: 0.
+  epoch: 1000
+  patience: 100
+  batchsize: 4
+
+gnn:
+  num_eig: 32
+  hidden: 128
+  num_encode_layers: 2
+  num_conv_layers: 6
+  num_mlp_layers: 1
+  ign_mlp_layer: 1
+  num_pred_layers: 3
+  norm: graphnorm
