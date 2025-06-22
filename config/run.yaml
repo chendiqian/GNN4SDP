@@ -12,18 +12,18 @@ wandb:
   enable: False
 
 train:
-  datapath: ./datasets/maxcut_er_50_0.1
-  debug: true
-  runs: 1
+  datapath: /work/log1/chendi.qian/SDP/maxcut_er_50_0.1
+  debug: false
+  runs: 3
   ckpt: false
   lr: 1.e-3
   weight_decay: 0.
   epoch: 1000
   patience: 100
-  batchsize: 4
+  batchsize: 128
 
 gnn:
-  num_eig: 32
+  num_eig: 16
   hidden: 128
   num_encode_layers: 2
   num_conv_layers: 6
