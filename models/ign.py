@@ -17,7 +17,7 @@ class Layer2to1(nn.Module):
         self.normalization = normalization
         self.normalization_val = normalization_val
 
-        self.basis_dimension = 2
+        self.basis_dimension = 1
 
         # initialization values for variables
         self.coeffs = nn.Parameter(
@@ -60,7 +60,7 @@ class Layer1to2(nn.Module):
         self.normalization = normalization
         self.normalization_val = normalization_val
 
-        self.basis_dimension = 2
+        self.basis_dimension = 1
 
         # initialization values for variables
         self.coeffs = nn.Parameter(
@@ -90,7 +90,7 @@ class Layer1to2(nn.Module):
 
 # ops_2_to_1
 def contractions_2_to_1(inputs, dim, normalization='inf', normalization_val=1.0):  # N x D x m x m
-    diag_part = torch.diagonal(inputs, dim1=2, dim2=3)  # N x D x m
+    # diag_part = torch.diagonal(inputs, dim1=2, dim2=3)  # N x D x m
 
     # sum_diag_part = torch.sum(diag_part, dim=2, keepdim=True)  # N x D x 1
     sum_of_rows = torch.sum(inputs, dim=3)  # N x D x m
@@ -98,7 +98,7 @@ def contractions_2_to_1(inputs, dim, normalization='inf', normalization_val=1.0)
     # sum_all = torch.sum(inputs, dim=(2, 3))  # N x D
 
     # op1 - (123) - extract diag
-    op1 = diag_part  # N x D x m
+    # op1 = diag_part  # N x D x m
 
     # op2 - (123) + (12)(3) - tile sum of diag part
     # op2 = sum_diag_part.repeat(1, 1, dim)
@@ -121,7 +121,7 @@ def contractions_2_to_1(inputs, dim, normalization='inf', normalization_val=1.0)
             # op4 = op4 / dim
             # op5 = op5 / (dim ** 2)
 
-    return [op1, op3,]
+    return [op3,]
 
 
 # ops_1_to_2
@@ -129,7 +129,7 @@ def contractions_1_to_2(inputs, dim, normalization='inf', normalization_val=1.0)
     # sum_all = torch.sum(inputs, dim=2, keepdim=True)  # N x D x 1
 
     # op1 - (123) - place on diag
-    op1 = torch.diag_embed(inputs, dim1=2, dim2=3)  # N x D x m x m
+    # op1 = torch.diag_embed(inputs, dim1=2, dim2=3)  # N x D x m x m
 
     # op2 - (123) + (12)(3) - tile sum on diag
     # op2 = torch.diag_embed(sum_all.repeat(1, 1, dim), dim1=2, dim2=3)  # N x D x m x m
@@ -150,4 +150,4 @@ def contractions_1_to_2(inputs, dim, normalization='inf', normalization_val=1.0)
             # op2 = op2 / dim
             # op5 = op5 / dim
 
-    return [op1, inputs.unsqueeze(2) + inputs.unsqueeze(3)]
+    return [inputs.unsqueeze(2) + inputs.unsqueeze(3),]
