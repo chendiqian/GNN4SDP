@@ -1,3 +1,5 @@
+import pdb
+
 import torch
 from torch_scatter import scatter
 
@@ -47,9 +49,9 @@ class PlainGNNTrainer:
             val_losses += loss.sum()
             num_graphs += data.num_graphs
 
-            batched_c = pred.new_zeros(*pred.shape)
-            batched_c[data['obj', 'to', 'vals'].edge_index[1]] = data['obj', 'to', 'vals'].edge_attr.squeeze(1)
-            obj_pred = scatter(pred * batched_c, data.batch_dict['vals'], dim=0, reduce='sum')
+            obj_pred = scatter(pred[data['obj', 'to', 'vals'].edge_index[1]] *
+                               data['obj', 'to', 'vals'].edge_attr.squeeze(1),
+                               data['obj', 'to', 'vals'].edge_index[0], dim=0, reduce='sum')
             obj_gt = data.obj_solution
             obj_gap = (obj_pred - obj_gt).abs() / torch.maximum(obj_gt, obj_pred).abs()
             objgaps.append(obj_gap)
