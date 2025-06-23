@@ -11,6 +11,11 @@ from models.sageconv import SAGEConv
 from models.ign import Layer1to2, Layer2to1
 
 
+class Identity(torch.nn.Module):
+    def forward(self, x, *args):
+        return x
+
+
 class GNN(torch.nn.Module):
     def __init__(self,
                  hid_dim,
@@ -38,7 +43,7 @@ class GNN(torch.nn.Module):
             if ign_mlp_layer > 0:
                 mlp = MLP([hid_dim] * (ign_mlp_layer + 1), act=act, norm=norm, plain_last=False)
             else:
-                mlp = torch.nn.Identity()
+                mlp = Identity()
             self.post_ign_mlp_1to2.append(mlp)
 
             if layer != num_conv_layers - 1:
@@ -46,7 +51,7 @@ class GNN(torch.nn.Module):
                 if ign_mlp_layer > 0:
                     mlp = MLP([hid_dim] * (ign_mlp_layer + 1), act=act, norm=norm, plain_last=False)
                 else:
-                    mlp = torch.nn.Identity()
+                    mlp = Identity()
                 self.post_ign_mlp_2to1.append(mlp)
 
             self.gcns.append(HeteroConvLayer(
