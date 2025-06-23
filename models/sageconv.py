@@ -9,7 +9,7 @@ class SAGEConv(MessagePassing):
 
         self.lin_src = Linear(hid_dim, hid_dim)
         self.lin_dst = Linear(hid_dim, hid_dim)
-        self.mlp = MLP([hid_dim] * (num_mlp_layers + 1), norm=norm, plain_last=False)
+        self.mlp = MLP([hid_dim] * (num_mlp_layers + 1), act='gelu', norm=norm, plain_last=False)
 
     def reset_parameters(self):
         self.lin_dst.reset_parameters()
@@ -27,7 +27,7 @@ class SAGEConv(MessagePassing):
         return self.mlp(out, batch)
 
     def message(self, x_j, edge_attr):
-        return F.relu(x_j) * edge_attr
+        return F.gelu(x_j) * edge_attr
 
     def update(self, aggr_out):
         return aggr_out

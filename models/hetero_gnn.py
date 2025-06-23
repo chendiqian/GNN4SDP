@@ -21,8 +21,9 @@ class GNN(torch.nn.Module):
                  norm):
         super().__init__()
 
-        self.cons_encoder = MLP([1] + [hid_dim] * num_encode_layers, norm=None)
-        self.vals_encoder = MLP([2] + [hid_dim] * num_encode_layers, norm=None)
+        self.cons_encoder = MLP([1] + [hid_dim] * num_encode_layers, act='gelu', norm=None)
+        self.vals_encoder = MLP([2] + [hid_dim] * num_encode_layers, act='gelu', norm=None)
+        self.obj_encoder = MLP([1] + [hid_dim] * num_encode_layers, act='gelu', norm=None)
 
         self.gcns = torch.nn.ModuleList()
         self.ign_1to2 = torch.nn.ModuleList()
@@ -31,11 +32,11 @@ class GNN(torch.nn.Module):
         self.post_ign_mlp_2to1 = torch.nn.ModuleList()
         for layer in range(num_conv_layers):
             self.ign_1to2.append(Layer1to2(hid_dim, hid_dim))
-            self.post_ign_mlp_1to2.append(MLP([hid_dim] * (ign_mlp_layer + 1), norm=norm, plain_last=False))
+            self.post_ign_mlp_1to2.append(MLP([hid_dim] * (ign_mlp_layer + 1), act='gelu', norm=norm, plain_last=False))
 
             if layer != num_conv_layers - 1:
                 self.ign_2to1.append(Layer2to1(hid_dim, hid_dim))
-                self.post_ign_mlp_2to1.append(MLP([hid_dim] * (ign_mlp_layer + 1), norm=norm, plain_last=False))
+                self.post_ign_mlp_2to1.append(MLP([hid_dim] * (ign_mlp_layer + 1), act='gelu', norm=norm, plain_last=False))
 
             self.gcns.append(HeteroConvLayer(
                 v2c_conv=SAGEConv(hid_dim=hid_dim, num_mlp_layers=num_mlp_layers, norm=norm),
@@ -44,7 +45,7 @@ class GNN(torch.nn.Module):
                 o2v_conv=SAGEConv(hid_dim=hid_dim, num_mlp_layers=num_mlp_layers, norm=norm),
             ))
 
-        self.predictor = MLP([hid_dim] * num_pred_layers + [1], norm=None)
+        self.predictor = MLP([hid_dim] * num_pred_layers + [1], act='gelu', norm=None)
 
     def init_embedding(self, data):
         batch_dict: Dict[NodeType, torch.LongTensor] = data.batch_dict
@@ -54,6 +55,7 @@ class GNN(torch.nn.Module):
         norm_dict: Dict[EdgeType, Optional[torch.FloatTensor]] = data.norm_dict
 
         cons_embedding = self.cons_encoder(data.b[:, None])
+        obj_embedding = self.obj_encoder(cons_embedding.new_ones(data['obj'].num_nodes, 1))
 
         # https://github.com/rampasek/GraphGPS/blob/main/graphgps/encoder/laplace_pos_encoder.py#L99
         pos_enc = torch.stack((data.c_eigvec, data.c_eigval), dim=-1)  # (Num nodes) x (Num Eigenvectors) x 2
@@ -62,8 +64,7 @@ class GNN(torch.nn.Module):
 
         x_dict: Dict[NodeType, torch.FloatTensor] = {'vals': vals_embedding,
                                                      'cons': cons_embedding,
-                                                     'obj': torch.ones(data['obj'].num_nodes, vals_embedding.shape[-1],
-                                                                       device=vals_embedding.device, dtype=torch.float)}
+                                                     'obj': obj_embedding}
         return batch_dict, edge_index_dict, edge_attr_dict, norm_dict, x_dict
 
     def forward(self, data):
@@ -79,7 +80,7 @@ class GNN(torch.nn.Module):
             x_dense = x_dense.permute(0, 2, 1)  # B x Nmax x F -> B x F x Nmax
             x_x_dense = self.ign_1to2[i](x_dense)  # B x F x Nmax x Nmax
             x_x_dense = x_x_dense.permute(0, 2, 3, 1)  # B x Nmax x Nmax x F
-            x_dict['vals'] = self.post_ign_mlp_1to2[i](torch.relu(x_x_dense[real_x_x_mask]),
+            x_dict['vals'] = self.post_ign_mlp_1to2[i](torch.nn.functional.gelu(x_x_dense[real_x_x_mask]),
                                                        batch_dict['vals'])  # sum(nnodes ** 2) x F
             # now we do message passing
             x_dict = layer(x_dict, batch_dict, edge_index_dict, edge_attr_dict, norm_dict)
@@ -91,7 +92,7 @@ class GNN(torch.nn.Module):
                 new_x = self.ign_2to1[i](new_x_x_dense)
                 new_x = new_x.permute(0, 2, 1)  # B x F x Nmax -> B x Nmax x F
                 new_x = new_x[real_x_mask]
-                new_x = torch.relu(new_x)
+                new_x = torch.nn.functional.gelu(new_x)
                 new_x = self.post_ign_mlp_2to1[i](new_x, batch_dict['_vals'])
                 x_dict['vals'] = new_x
 
