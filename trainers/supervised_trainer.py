@@ -53,7 +53,7 @@ class PlainGNNTrainer:
                                data['obj', 'to', 'vals'].edge_attr.squeeze(1),
                                data['obj', 'to', 'vals'].edge_index[0], dim=0, reduce='sum')
             obj_gt = data.obj_solution
-            obj_gap = (obj_pred - obj_gt).abs() / torch.maximum(obj_gt, obj_pred).abs()
+            obj_gap = (obj_pred - obj_gt).abs() / torch.maximum(obj_gt.abs(), obj_gt.abs())
             objgaps.append(obj_gap)
 
         objgaps = torch.cat(objgaps, dim=0).mean().item()
