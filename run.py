@@ -57,7 +57,8 @@ def main(args: DictConfig):
                     num_pred_layers=args.gnn.num_pred_layers,
                     num_mlp_layers=args.gnn.num_mlp_layers,
                     ign_mlp_layer=args.gnn.ign_mlp_layer,
-                    norm=args.gnn.norm).to(device)
+                    norm=args.gnn.norm,
+                    act=args.gnn.act).to(device)
 
         optimizer = optim.Adam(model.parameters(), lr=args.train.lr, weight_decay=args.train.weight_decay)
         scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer,

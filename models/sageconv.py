@@ -1,15 +1,15 @@
-import torch.nn.functional as F
-
 from torch_geometric.nn import MessagePassing, MLP, Linear
+from torch_geometric.nn.resolver import activation_resolver
 
 
 class SAGEConv(MessagePassing):
-    def __init__(self, hid_dim, num_mlp_layers, norm):
+    def __init__(self, hid_dim, num_mlp_layers, act, norm):
         super(SAGEConv, self).__init__(aggr='add')
 
+        self.act = activation_resolver(act)
         self.lin_src = Linear(hid_dim, hid_dim)
         self.lin_dst = Linear(hid_dim, hid_dim)
-        self.mlp = MLP([hid_dim] * (num_mlp_layers + 1), act='gelu', norm=norm, plain_last=False)
+        self.mlp = MLP([hid_dim] * (num_mlp_layers + 1), act=act, norm=norm, plain_last=False)
 
     def reset_parameters(self):
         self.lin_dst.reset_parameters()
@@ -27,7 +27,7 @@ class SAGEConv(MessagePassing):
         return self.mlp(out, batch)
 
     def message(self, x_j, edge_attr):
-        return F.gelu(x_j) * edge_attr
+        return self.act(x_j) * edge_attr
 
     def update(self, aggr_out):
         return aggr_out

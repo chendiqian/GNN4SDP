@@ -31,3 +31,4 @@ gnn:
   ign_mlp_layer: 1
   num_pred_layers: 3
   norm: graphnorm
+  act: relu
