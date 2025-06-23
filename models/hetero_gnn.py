@@ -35,11 +35,19 @@ class GNN(torch.nn.Module):
         self.post_ign_mlp_2to1 = torch.nn.ModuleList()
         for layer in range(num_conv_layers):
             self.ign_1to2.append(Layer1to2(hid_dim, hid_dim))
-            self.post_ign_mlp_1to2.append(MLP([hid_dim] * (ign_mlp_layer + 1), act=act, norm=norm, plain_last=False))
+            if ign_mlp_layer > 0:
+                mlp = MLP([hid_dim] * (ign_mlp_layer + 1), act=act, norm=norm, plain_last=False)
+            else:
+                mlp = torch.nn.Identity()
+            self.post_ign_mlp_1to2.append(mlp)
 
             if layer != num_conv_layers - 1:
                 self.ign_2to1.append(Layer2to1(hid_dim, hid_dim))
-                self.post_ign_mlp_2to1.append(MLP([hid_dim] * (ign_mlp_layer + 1), act=act, norm=norm, plain_last=False))
+                if ign_mlp_layer > 0:
+                    mlp = MLP([hid_dim] * (ign_mlp_layer + 1), act=act, norm=norm, plain_last=False)
+                else:
+                    mlp = torch.nn.Identity()
+                self.post_ign_mlp_2to1.append(mlp)
 
             self.gcns.append(HeteroConvLayer(
                 v2c_conv=SAGEConv(hid_dim=hid_dim, num_mlp_layers=num_mlp_layers, act=act, norm=norm),
