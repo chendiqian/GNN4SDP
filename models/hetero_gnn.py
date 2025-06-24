@@ -76,7 +76,7 @@ class GNN(torch.nn.Module):
             if real_x_x_mask is None:
                 real_x_x_mask = torch.einsum('bn,bm->bnm', real_x_mask, real_x_mask)  # B x Nmax x Nmax
 
-            x_x_dense = self.ign_1to2[i](x_dense,real_x_x_mask, batch_dict['vals'])
+            x_x_dense = self.ign_1to2[i](x_dense, real_x_x_mask, batch_dict['vals'])
             x_dict['vals'] = x_x_dense  # sum(nnodes ** 2) x F
             # now we do message passing
             x_dict = layer(x_dict, batch_dict, edge_index_dict, edge_attr_dict, norm_dict)

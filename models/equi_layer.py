@@ -9,7 +9,7 @@ class EquiLayer2to1(nn.Module):
 
         self.input_depth = input_depth
         self.output_depth = output_depth
-        self.mlp = MLP([input_depth] + [output_depth] * (mlp_layers + 1), act=act, norm=norm, plain_last=False)
+        self.mlp = MLP([input_depth] + [output_depth] * mlp_layers, act=act, norm=norm, plain_last=False)
 
     def forward(self, inputs, real_mask, batch):
         # B x Nmax x Nmax x F
@@ -28,7 +28,7 @@ class EquiLayer1to2(nn.Module):
 
         self.input_depth = input_depth
         self.output_depth = output_depth
-        self.mlp = MLP([input_depth] + [output_depth] * (mlp_layers + 1), act=act, norm=norm, plain_last=False)
+        self.mlp = MLP([input_depth] + [output_depth] * mlp_layers, act=act, norm=norm, plain_last=False)
 
     def forward(self, inputs, real_mask, batch):
         # B x Nmax x F
