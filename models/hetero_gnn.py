@@ -4,16 +4,12 @@ import torch
 from torch_geometric.nn import MLP
 from torch_geometric.typing import EdgeType, NodeType
 from torch_geometric.utils import to_dense_batch
-from torch_geometric.nn.resolver import activation_resolver
+# from torch_geometric.nn.resolver import activation_resolver
 
 from models.hetero_conv import HeteroConvLayer
 from models.sageconv import SAGEConv
-from models.ign import Layer1to2, Layer2to1
-
-
-class Identity(torch.nn.Module):
-    def forward(self, x, *args):
-        return x
+# from models.ign import Layer1to2, Layer2to1
+from models.equi_layer import EquiLayer1to2, EquiLayer2to1
 
 
 class GNN(torch.nn.Module):
@@ -32,27 +28,14 @@ class GNN(torch.nn.Module):
         self.vals_encoder = MLP([2] + [hid_dim] * num_encode_layers, act=act, norm=None)
         self.obj_encoder = MLP([1] + [hid_dim] * num_encode_layers, act=act, norm=None)
 
-        self.act = activation_resolver(act)
         self.gcns = torch.nn.ModuleList()
         self.ign_1to2 = torch.nn.ModuleList()
         self.ign_2to1 = torch.nn.ModuleList()
-        self.post_ign_mlp_1to2 = torch.nn.ModuleList()
-        self.post_ign_mlp_2to1 = torch.nn.ModuleList()
         for layer in range(num_conv_layers):
-            self.ign_1to2.append(Layer1to2(hid_dim, hid_dim))
-            if ign_mlp_layer > 0:
-                mlp = MLP([hid_dim] * (ign_mlp_layer + 1), act=act, norm=norm, plain_last=False)
-            else:
-                mlp = Identity()
-            self.post_ign_mlp_1to2.append(mlp)
+            self.ign_1to2.append(EquiLayer1to2(hid_dim, hid_dim, ign_mlp_layer, act, norm))
 
             if layer != num_conv_layers - 1:
-                self.ign_2to1.append(Layer2to1(hid_dim, hid_dim))
-                if ign_mlp_layer > 0:
-                    mlp = MLP([hid_dim] * (ign_mlp_layer + 1), act=act, norm=norm, plain_last=False)
-                else:
-                    mlp = Identity()
-                self.post_ign_mlp_2to1.append(mlp)
+                self.ign_2to1.append(EquiLayer2to1(hid_dim, hid_dim, ign_mlp_layer, act, norm))
 
             self.gcns.append(HeteroConvLayer(
                 v2c_conv=SAGEConv(hid_dim=hid_dim, num_mlp_layers=num_mlp_layers, act=act, norm=norm),
@@ -93,23 +76,15 @@ class GNN(torch.nn.Module):
             if real_x_x_mask is None:
                 real_x_x_mask = torch.einsum('bn,bm->bnm', real_x_mask, real_x_mask)  # B x Nmax x Nmax
 
-            x_dense = x_dense.permute(0, 2, 1)  # B x Nmax x F -> B x F x Nmax
-            x_x_dense = self.ign_1to2[i](x_dense)  # B x F x Nmax x Nmax
-            x_x_dense = x_x_dense.permute(0, 2, 3, 1)  # B x Nmax x Nmax x F
-            x_dict['vals'] = self.post_ign_mlp_1to2[i](self.act(x_x_dense[real_x_x_mask]),
-                                                       batch_dict['vals'])  # sum(nnodes ** 2) x F
+            x_x_dense = self.ign_1to2[i](x_dense, real_x_x_mask, batch_dict['vals'])
+            x_dict['vals'] = x_x_dense  # sum(nnodes ** 2) x F
             # now we do message passing
             x_dict = layer(x_dict, batch_dict, edge_index_dict, edge_attr_dict, norm_dict)
 
             if i != len(self.gcns) - 1:  # not the last layer
-                new_x_x_dense = x_x_dense.new_zeros(*x_x_dense.shape)
+                new_x_x_dense = x_x_dense.new_zeros(*real_x_x_mask.shape + (x_x_dense.shape[-1],))
                 new_x_x_dense[real_x_x_mask] = x_dict['vals']  # B x Nmax x Nmax x F
-                new_x_x_dense = new_x_x_dense.permute(0, 3, 1, 2)
-                new_x = self.ign_2to1[i](new_x_x_dense)
-                new_x = new_x.permute(0, 2, 1)  # B x F x Nmax -> B x Nmax x F
-                new_x = new_x[real_x_mask]
-                new_x = self.act(new_x)
-                new_x = self.post_ign_mlp_2to1[i](new_x, batch_dict['_vals'])
+                new_x = self.ign_2to1[i](new_x_x_dense, real_x_mask, batch_dict['_vals'])
                 x_dict['vals'] = new_x
 
         x = self.predictor(x_dict['vals']).squeeze()
