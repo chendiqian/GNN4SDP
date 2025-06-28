@@ -50,27 +50,19 @@ class HeteroConvLayer(HeteroConv):
             self,
             v2c_conv: torch.nn.Module,
             c2v_conv: torch.nn.Module,
-            v2o_conv: torch.nn.Module,
-            o2v_conv: torch.nn.Module,
             sync_conv: bool = False
     ):
         super().__init__()
 
         self.convs = torch.nn.ModuleDict(
             {'vals_cons': v2c_conv,
-             'cons_vals': c2v_conv,
-             'vals_obj': v2o_conv,
-             'obj_vals': o2v_conv,}
+             'cons_vals': c2v_conv}
         )
         # we use c -> v -> o setting, so o is the final output
         self.conv_sequence = [('vals_cons',),
-                              ('cons_vals',),
-                              ('vals_obj',),
-                              ('obj_vals',),]
+                              ('cons_vals',)]
         self.sync_conv = sync_conv
 
     def reset_parameters(self):
         self.convs['vals_cons'].reset_parameters()
         self.convs['cons_vals'].reset_parameters()
-        self.convs['vals_obj'].reset_parameters()
-        self.convs['obj_vals'].reset_parameters()

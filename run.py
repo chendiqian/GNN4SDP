@@ -12,7 +12,6 @@ from utils.experiment import save_run_config, setup_wandb, count_parameters
 from models.hetero_gnn import GNN
 from trainers.supervised_trainer import PlainGNNTrainer
 from trainers.training_loops import supervised_train_eval_loops
-from data.transform import SelectEigvec
 
 
 @hydra.main(version_base=None, config_path='./config', config_name="run")
@@ -20,10 +19,9 @@ def main(args: DictConfig):
     log_folder_name = save_run_config(args)
     setup_wandb(args)
 
-    transform = SelectEigvec(args.gnn.num_eig)
-    train_set = LPDataset(args.train.datapath, 'train', transform=transform)
-    valid_set = LPDataset(args.train.datapath, 'valid', transform=transform)
-    test_set = LPDataset(args.train.datapath, 'test', transform=transform)
+    train_set = LPDataset(args.train.datapath, 'train', transform=None)
+    valid_set = LPDataset(args.train.datapath, 'valid', transform=None)
+    test_set = LPDataset(args.train.datapath, 'test', transform=None)
 
     if args.train.debug:
         train_set = train_set[:20]
@@ -56,7 +54,6 @@ def main(args: DictConfig):
                     num_conv_layers=args.gnn.num_conv_layers,
                     num_pred_layers=args.gnn.num_pred_layers,
                     num_mlp_layers=args.gnn.num_mlp_layers,
-                    ign_mlp_layer=args.gnn.ign_mlp_layer,
                     norm=args.gnn.norm,
                     act=args.gnn.act).to(device)
 

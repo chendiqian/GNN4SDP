@@ -5,7 +5,7 @@ from torch_geometric.data import Data, Batch
 
 
 def collate_fn_lp_base(graphs: List[Data]):
-    new_batch = Batch.from_data_list(graphs, exclude_keys=['x', 'nulls'])  # we drop the dumb x features
+    new_batch = Batch.from_data_list(graphs, exclude_keys=['x', 'nulls', 'c_eigval', 'c_eigvec'])
     # finish the half of symmetric edges
     flip_tensor = torch.tensor([1, 0])
     for k, v in graphs[0].edge_index_dict.items():
