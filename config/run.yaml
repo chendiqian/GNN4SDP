@@ -23,12 +23,10 @@ train:
   batchsize: 128
 
 gnn:
-  num_eig: 4
   hidden: 128
   num_encode_layers: 2
   num_conv_layers: 6
   num_mlp_layers: 1
-  ign_mlp_layer: 1  # this is best so far
   num_pred_layers: 3
   norm: graphnorm
   act: gelu
