@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader
 from data.collate_func import collate_fn_lp_base
 from data.dataset import LPDataset
 from utils.experiment import save_run_config, setup_wandb, count_parameters
-from models.hetero_gnn import GNN
+from models.ign import IGN
 from trainers.supervised_trainer import PlainGNNTrainer
 from trainers.training_loops import supervised_train_eval_loops
 
@@ -49,7 +49,7 @@ def main(args: DictConfig):
     test_objgaps = []
 
     for run in range(args.train.runs):
-        model = GNN(hid_dim=args.gnn.hidden,
+        model = IGN(hid_dim=args.gnn.hidden,
                     num_encode_layers=args.gnn.num_encode_layers,
                     num_conv_layers=args.gnn.num_conv_layers,
                     num_pred_layers=args.gnn.num_pred_layers,

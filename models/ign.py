@@ -1,267 +1,76 @@
-# https://github.com/HyTruongSon/InvariantGraphNetworks-PyTorch/blob/master/layers/equivariant_linear_pytorch.py
+from typing import Dict, Optional
+
 import torch
-import torch.nn as nn
-from torch_geometric.nn.resolver import activation_resolver
+from torch_geometric.nn import MLP
+from torch_geometric.typing import EdgeType, NodeType
+from torch_geometric.utils import to_dense_batch
+
+from models.hetero_conv import HeteroConvLayer
+from models.sageconv import SAGEConv
+from models.ign_layer import Layer2to1, Layer2to2
 
 
-class Layer2to2(nn.Module):
-    def __init__(self, input_depth, output_depth, act, normalization='inf', normalization_val=1.0):
+class IGN(torch.nn.Module):
+    def __init__(self,
+                 hid_dim,
+                 num_encode_layers,
+                 num_conv_layers,
+                 num_pred_layers,
+                 num_mlp_layers,
+                 norm,
+                 act):
         super().__init__()
 
-        self.input_depth = input_depth
-        self.output_depth = output_depth
-        self.normalization = normalization
-        self.normalization_val = normalization_val
-        self.act = activation_resolver(act)
-
-        self.basis_dimension = 15
-
-        # initialization values for variables
-        self.coeffs = nn.Parameter(
-            torch.empty(self.input_depth, self.output_depth, self.basis_dimension), requires_grad=True)
-        nn.init.xavier_normal_(self.coeffs)
-
-        # bias
-        self.diag_bias = torch.nn.Parameter(torch.zeros(1, self.output_depth, 1, 1))
-        self.all_bias = torch.nn.Parameter(torch.zeros(1, self.output_depth, 1, 1))
-
-    def forward(self, inputs):
-        """
-        :param inputs: N x D x m x m tensor
-        :return: output: N x S x m x m tensor
-        """
-        m = inputs.size(3)  # extract dimension
-
-        ops_out = contractions_2_to_2(inputs, m, normalization=self.normalization)
-        ops_out = torch.stack(ops_out, dim=2)
-
-        output = torch.einsum('dsb,ndbij->nsij', self.coeffs, ops_out)  # N x S x m x m
-
-        # bias
-        mat_diag_bias = torch.eye(inputs.size(3), device=output.device).unsqueeze(dim=0).unsqueeze(dim=0) * self.diag_bias
-        output = output + self.all_bias + mat_diag_bias
-
-        return self.act(output)
-
-
-# equi_2_to_1
-class Layer2to1(nn.Module):
-    """
-    :param input_depth: D
-    :param output_depth: S
-    """
-
-    def __init__(self, input_depth, output_depth, act, normalization='inf', normalization_val=1.0):
-        super().__init__()
-
-        self.input_depth = input_depth
-        self.output_depth = output_depth
-        self.normalization = normalization
-        self.normalization_val = normalization_val
-        self.act = activation_resolver(act)
-
-        self.basis_dimension = 2
-
-        # initialization values for variables
-        self.coeffs = nn.Parameter(
-            torch.empty(self.input_depth, self.output_depth, self.basis_dimension), requires_grad=True)
-        nn.init.xavier_normal_(self.coeffs)
-
-        # bias
-        self.bias = nn.Parameter(torch.zeros(1, self.output_depth, 1), requires_grad=True)
-
-    def forward(self, inputs):
-        """
-        :param inputs: N x D x m x m tensor
-        :return: output: N x S x m tensor
-        """
-        m = inputs.size(3)  # extract dimension
-
-        ops_out = contractions_2_to_1(inputs, m, normalization=self.normalization)
-        ops_out = torch.stack(ops_out, dim=2)  # N x D x B x m
-
-        output = torch.einsum('dsb,ndbi->nsi', self.coeffs, ops_out)  # N x S x m
-
-        # bias
-        output = output + self.bias
-
-        return self.act(output)
-
-
-# equi_1_to_2
-class Layer1to2(nn.Module):
-    """
-    :param input_depth: D
-    :param output_depth: S
-    """
-
-    def __init__(self, input_depth, output_depth, act, normalization='inf', normalization_val=1.0):
-        super().__init__()
-
-        self.input_depth = input_depth
-        self.output_depth = output_depth
-        self.normalization = normalization
-        self.normalization_val = normalization_val
-        self.act = activation_resolver(act)
-
-        self.basis_dimension = 1
-
-        # initialization values for variables
-        self.coeffs = nn.Parameter(
-            torch.empty(self.input_depth, self.output_depth, self.basis_dimension), requires_grad=True)
-        nn.init.xavier_normal_(self.coeffs)
-
-        # bias
-        self.bias = nn.Parameter(torch.zeros(1, self.output_depth, 1, 1))
-
-    def forward(self, inputs):
-        """
-        :param inputs: N x D x m tensor
-        :return: output: N x S x m x m tensor
-        """
-        m = inputs.size(2)  # extract dimension
-
-        ops_out = contractions_1_to_2(inputs, m, normalization=self.normalization)
-        ops_out = torch.stack(ops_out, dim=2)  # N x D x B x m x m
-
-        output = torch.einsum('dsb,ndbij->nsij', self.coeffs, ops_out)  # N x S x m x m
-
-        # bias
-        output = output + self.bias
-
-        return self.act(output)
-
-
-# ops_2_to_1
-def contractions_2_to_1(inputs, dim, normalization='inf', normalization_val=1.0):  # N x D x m x m
-    diag_part = torch.diagonal(inputs, dim1=2, dim2=3)  # N x D x m
-
-    # sum_diag_part = torch.sum(diag_part, dim=2, keepdim=True)  # N x D x 1
-    sum_of_rows = torch.sum(inputs, dim=3)  # N x D x m
-    # sum_of_cols = torch.sum(inputs, dim=2)  # N x D x m
-    # sum_all = torch.sum(inputs, dim=(2, 3))  # N x D
-
-    # op1 - (123) - extract diag
-    op1 = diag_part  # N x D x m
-
-    # op2 - (123) + (12)(3) - tile sum of diag part
-    # op2 = sum_diag_part.repeat(1, 1, dim)
-    # op2 = torch.cat([sum_diag_part for d in range(dim)], dim=2)  # N x D x m
-
-    # op3 - (123) + (13)(2) - place sum of row i in element i
-    op3 = sum_of_rows  # N x D x m
-
-    # op4 - (123) + (23)(1) - place sum of col i in element i
-    # op4 = sum_of_cols  # N x D x m
-
-    # op5 - (1)(2)(3) + (123) + (12)(3) + (13)(2) + (23)(1) - tile sum of all entries
-    # op5 = sum_all.unsqueeze(dim=2).repeat(1, 1, dim)
-    # op5 = torch.cat([sum_all.unsqueeze(dim=2) for d in range(dim)], dim=2)  # N x D x m
-
-    if normalization is not None:
-        if normalization == 'inf':
-            # op2 = op2 / dim
-            op3 = op3 / dim
-            # op4 = op4 / dim
-            # op5 = op5 / (dim ** 2)
-
-    return [op1, op3]
-
-
-# ops_1_to_2
-def contractions_1_to_2(inputs, dim, normalization='inf', normalization_val=1.0):  # N x D x m x m
-    # sum_all = torch.sum(inputs, dim=2, keepdim=True)  # N x D x 1
-
-    # op1 - (123) - place on diag
-    # op1 = torch.diag_embed(inputs, dim1=2, dim2=3)  # N x D x m x m
-
-    # op2 - (123) + (12)(3) - tile sum on diag
-    # op2 = torch.diag_embed(sum_all.repeat(1, 1, dim), dim1=2, dim2=3)  # N x D x m x m
-
-    # op3 - (123) + (13)(2) - tile element i in row i
-    # op3 = inputs.unsqueeze(2).repeat(1, 1, dim, 1)
-    # op3 = torch.cat([torch.unsqueeze(inputs, dim=2) for d in range(dim)], dim=2)  # N x D x m x m
-
-    # op4 - (123) + (23)(1) - tile element i in col i
-    # op4 = inputs.unsqueeze(3).repeat(1, 1, 1, dim)
-    # op4 = torch.cat([torch.unsqueeze(inputs, dim=3) for d in range(dim)], dim=3)  # N x D x m x m
-
-    # op5 - (1)(2)(3) + (123) + (12)(3) + (13)(2) + (23)(1) - tile sum of all entries
-    # op5 = sum_all.unsqueeze(3).repeat(1, 1, dim, dim)  # N x D x m x m
-
-    # if normalization is not None:
-    #     if normalization == 'inf':
-            # op2 = op2 / dim
-            # op5 = op5 / dim
-
-    return [inputs.unsqueeze(2) + inputs.unsqueeze(3),]
-
-
-def contractions_2_to_2(inputs, dim, normalization='inf', normalization_val=1.0):  # N x D x m x m
-    diag_part = torch.diagonal(inputs, dim1=2, dim2=3)  # N x D x m
-    sum_diag_part = torch.sum(diag_part, dim=2).unsqueeze(dim=2)  # N x D x 1
-    sum_of_rows = torch.sum(inputs, dim=3)  # N x D x m
-    sum_of_cols = torch.sum(inputs, dim=2)  # N x D x m
-    sum_all = torch.sum(sum_of_rows, dim=2)  # N x D
-
-    # op1 - (1234) - extract diag
-    op1 = torch.diag_embed(diag_part)  # N x D x m x m
-
-    # op2 - (1234) + (12)(34) - place sum of diag on diag
-    op2 = torch.diag_embed(torch.cat([sum_diag_part for d in range(dim)], dim=2))  # N x D x m x m
-
-    # op3 - (1234) + (123)(4) - place sum of row i on diag ii
-    op3 = torch.diag_embed(sum_of_rows)  # N x D x m x m
-
-    # op4 - (1234) + (124)(3) - place sum of col i on diag ii
-    op4 = torch.diag_embed(sum_of_cols)  # N x D x m x m
-
-    # op5 - (1234) + (124)(3) + (123)(4) + (12)(34) + (12)(3)(4) - place sum of all entries on diag
-    op5 = torch.diag_embed(torch.cat([sum_all.unsqueeze(dim=2) for d in range(dim)], dim=2))  # N x D x m x m
-
-    # op6 - (14)(23) + (13)(24) + (24)(1)(3) + (124)(3) + (1234) - place sum of col i on row i
-    op6 = torch.cat([sum_of_cols.unsqueeze(dim=3) for d in range(dim)], dim=3)  # N x D x m x m
-
-    # op7 - (14)(23) + (23)(1)(4) + (234)(1) + (123)(4) + (1234) - place sum of row i on row i
-    op7 = torch.cat([sum_of_rows.unsqueeze(dim=3) for d in range(dim)], dim=3)  # N x D x m x m
-
-    # op8 - (14)(2)(3) + (134)(2) + (14)(23) + (124)(3) + (1234) - place sum of col i on col i
-    op8 = torch.cat([sum_of_cols.unsqueeze(dim=2) for d in range(dim)], dim=2)  # N x D x m x m
-
-    # op9 - (13)(24) + (13)(2)(4) + (134)(2) + (123)(4) + (1234) - place sum of row i on col i
-    op9 = torch.cat([sum_of_rows.unsqueeze(dim=2) for d in range(dim)], dim=2)  # N x D x m x m
-
-    # op10 - (1234) + (14)(23) - identity
-    op10 = inputs  # N x D x m x m
-
-    # op11 - (1234) + (13)(24) - transpose
-    op11 = inputs.transpose(3, 2)  # N x D x m x m
-
-    # op12 - (1234) + (234)(1) - place ii element in row i
-    op12 = torch.cat([diag_part.unsqueeze(dim=3) for d in range(dim)], dim=3)  # N x D x m x m
-
-    # op13 - (1234) + (134)(2) - place ii element in col i
-    op13 = torch.cat([diag_part.unsqueeze(dim=2) for d in range(dim)], dim=2)  # N x D x m x m
-
-    # op14 - (34)(1)(2) + (234)(1) + (134)(2) + (1234) + (12)(34) - place sum of diag in all entries
-    op14 = torch.cat([sum_diag_part for d in range(dim)], dim=2)
-    op14 = torch.cat([op14.unsqueeze(dim=3) for d in range(dim)], dim=3)  # N x D x m x m
-
-    # op15 - sum of all ops - place sum of all entries in all entries
-    op15 = torch.cat([sum_all.unsqueeze(dim=2) for d in range(dim)], dim=2)
-    op15 = torch.cat([op15.unsqueeze(dim=3) for d in range(dim)], dim=3)  # N x D x m x m
-
-    if normalization is not None:
-        if normalization == 'inf':
-            op2 = op2 / dim
-            op3 = op3 / dim
-            op4 = op4 / dim
-            op5 = op5 / (dim ** 2)
-            op6 = op6 / dim
-            op7 = op7 / dim
-            op8 = op8 / dim
-            op9 = op9 / dim
-            op14 = op14 / dim
-            op15 = op15 / (dim ** 2)
-
-    return [op1, op2, op3, op4, op5, op6, op7, op8, op9, op10, op11, op12, op13, op14, op15]
+        self.cons_encoder = MLP([1] + [hid_dim] * num_encode_layers, act=act, norm=None)
+        self.vals_encoder = MLP([1] + [hid_dim] * num_encode_layers, act=act, norm=None)
+
+        self.gcns = torch.nn.ModuleList()
+        self.igns = torch.nn.ModuleList()
+        for layer in range(num_conv_layers):
+            self.igns.append(Layer2to2(hid_dim, hid_dim, act))
+            self.gcns.append(HeteroConvLayer(
+                v2c_conv=SAGEConv(hid_dim=hid_dim, num_mlp_layers=num_mlp_layers, act=act, norm=norm),
+                c2v_conv=SAGEConv(hid_dim=hid_dim, num_mlp_layers=num_mlp_layers, act=act, norm=norm)
+            ))
+
+        # Todo: potentially useful, to project 2d to 1d, then outer product for PSD prediction matrix
+        self.ign_2to1 = Layer2to1(hid_dim, hid_dim, act)
+        self.predictor = MLP([hid_dim] * num_pred_layers + [1], act=act, norm=None)
+
+    def init_embedding(self, data):
+        batch_dict: Dict[NodeType, torch.LongTensor] = data.batch_dict
+        batch_dict['_vals'] = data.first_order_batch if hasattr(data, 'first_order_batch') else None
+        edge_index_dict: Dict[EdgeType, torch.LongTensor] = data.edge_index_dict
+        edge_attr_dict: Dict[EdgeType, torch.FloatTensor] = data.edge_attr_dict
+        norm_dict: Dict[EdgeType, Optional[torch.FloatTensor]] = data.norm_dict
+
+        cons_embedding = self.cons_encoder(data.b[:, None])
+        vals_embedding = cons_embedding.new_zeros(data['vals'].num_nodes, 1)
+        vals_embedding[edge_index_dict[('obj', 'to', 'vals')][1]] = edge_attr_dict[('obj', 'to', 'vals')]
+        vals_embedding = self.vals_encoder(vals_embedding)
+
+        x_dict: Dict[NodeType, torch.FloatTensor] = {'vals': vals_embedding, 'cons': cons_embedding}
+        return batch_dict, edge_index_dict, edge_attr_dict, norm_dict, x_dict
+
+    def forward(self, data):
+        batch_dict, edge_index_dict, edge_attr_dict, norm_dict, x_dict = self.init_embedding(data)
+
+        _, real_x_mask = to_dense_batch(x_dict['vals'].new_empty(batch_dict['_vals'].shape[0]),
+                                              batch_dict['_vals'])  # B x Nmax x F
+        real_x_x_mask = torch.einsum('bn,bm->bnm', real_x_mask, real_x_mask)  # B x Nmax x Nmax
+        feature_dim = x_dict['vals'].shape[-1]
+        device = x_dict['vals'].device
+
+        for i, layer in enumerate(self.gcns):
+            x_x_dense = torch.zeros(*real_x_x_mask.shape + (feature_dim,), device=device, dtype=torch.float)
+            x_x_dense[real_x_x_mask] = x_dict['vals']
+
+            x_x_dense = self.igns[i](x_x_dense.permute(0, 3, 1, 2))  # b x f x n x n
+            x_x_dense = x_x_dense.permute(0, 2, 3, 1)[real_x_x_mask]
+
+            x_dict['vals'] = x_x_dense  # sum(nnodes ** 2) x F
+            # now we do message passing
+            x_dict = layer(x_dict, batch_dict, edge_index_dict, edge_attr_dict, norm_dict)
+
+        x = self.predictor(x_dict['vals']).squeeze()
+        return x
