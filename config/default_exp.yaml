@@ -1,0 +1,15 @@
+wandb:
+  project: default
+  name: ''
+  enable: False
+
+train:
+  datapath: /work/log1/chendi.qian/SDP/maxcut_er_50_0.1
+  debug: false
+  runs: 1
+  ckpt: false
+  lr: 1.e-3
+  weight_decay: 0.
+  epoch: 1000
+  patience: 100
+  batchsize: 128

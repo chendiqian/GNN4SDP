@@ -1,0 +1,9 @@
+defaults:
+  - default_exp
+  - default_gnn
+  - _self_
+  # If you want your primary config to override the values of configs from the Defaults List,
+  # append _self_ to the end of the Defaults List.
+
+gnn:
+  type: ign
