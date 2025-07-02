@@ -8,13 +8,13 @@ from torch.utils.data import DataLoader
 
 from data.collate_func import collate_fn_lp_base
 from data.dataset import LPDataset
-from utils.experiment import save_run_config, setup_wandb, count_parameters
-from models.ign import IGN
+from models import get_model
 from trainers.supervised_trainer import PlainGNNTrainer
 from trainers.training_loops import supervised_train_eval_loops
+from utils.experiment import save_run_config, setup_wandb, count_parameters
 
 
-@hydra.main(version_base=None, config_path='./config', config_name="run")
+@hydra.main(version_base=None, config_path='./config', config_name="mpnn")
 def main(args: DictConfig):
     log_folder_name = save_run_config(args)
     setup_wandb(args)
@@ -49,14 +49,7 @@ def main(args: DictConfig):
     test_objgaps = []
 
     for run in range(args.train.runs):
-        model = IGN(hid_dim=args.gnn.hidden,
-                    num_encode_layers=args.gnn.num_encode_layers,
-                    num_conv_layers=args.gnn.num_conv_layers,
-                    num_pred_layers=args.gnn.num_pred_layers,
-                    num_mlp_layers=args.gnn.num_mlp_layers,
-                    norm=args.gnn.norm,
-                    act=args.gnn.act).to(device)
-
+        model = get_model(args.gnn).to(device)
         optimizer = optim.Adam(model.parameters(), lr=args.train.lr, weight_decay=args.train.weight_decay)
         scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer,
                                                          mode='min',
