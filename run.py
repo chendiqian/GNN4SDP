@@ -54,7 +54,7 @@ def main(args: DictConfig):
         scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer,
                                                          mode='min',
                                                          factor=0.5,
-                                                         patience=100,
+                                                         patience=int(args.train.patience * 0.6),
                                                          min_lr=1.e-5)
 
         trainer = PlainGNNTrainer()
