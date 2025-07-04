@@ -7,4 +7,7 @@ defaults:
 
 gnn:
   type: ppgn
-  block_mlp_layers: 2
+  block_mlp_layers: 1
+  hidden: 96
+  num_encode_layers: 3
+  num_conv_layers: 5
