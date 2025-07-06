@@ -1,0 +1,32 @@
+program: run.py
+method: grid
+project: sweep_ppgn_50cut
+#run_cap: 30
+entity: chendiqian
+
+metric:
+  goal: minimize
+  name: test_obj_gap_mean
+parameters:
+  wandb.enable:
+    value: true
+
+  train.runs:
+    value: 3
+
+  gnn.hidden:
+    values: [64, 96, 128]
+  gnn.num_encode_layers:
+    value: 3
+  gnn.num_conv_layers:
+    value: 5
+  gnn.block_mlp_layers:
+    value: 1
+
+command:
+  - ${env}
+  - python
+  - ${program}
+  - --config-name
+  - ppgn
+  - ${args_no_hyphens}
