@@ -61,7 +61,7 @@ class Layer2to1(torch.nn.Module):
         :param inputs: N x m x m x D tensor
         :return: output: N x m x S tensor
         """
-        t1 = torch.diagonal(inputs, dim1=1, dim2=2)  # N x m x D
+        t1 = torch.diagonal(inputs, dim1=1, dim2=2).transpose(1, 2)  # N x m x D
         t2 = torch.mean(inputs, dim=1)  # N x m x D
         inputs = torch.stack([t1, t2], dim=0)  # op x N x m x D
 
