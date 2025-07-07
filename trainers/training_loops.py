@@ -13,14 +13,14 @@ def supervised_train_eval_loops(epochs, patience,
     best_model = copy.deepcopy(model.state_dict())
     for epoch in pbar:
         train_loss = trainer.train(train_loader, model, optimizer)
-        val_loss, val_obj_gap = trainer.eval(val_loader, model)
+        val_loss, val_obj_gap, psd_obj_gap = trainer.eval(val_loader, model)
 
         if scheduler is not None:
-            scheduler.step(val_obj_gap)
+            scheduler.step(psd_obj_gap)
 
-        if trainer.best_objgap > val_obj_gap:
+        if trainer.best_objgap > psd_obj_gap:
             trainer.patience = 0
-            trainer.best_objgap = val_obj_gap
+            trainer.best_objgap = psd_obj_gap
             best_model = copy.deepcopy(model.state_dict())
             if ckpt:
                 torch.save(model.state_dict(), os.path.join(log_folder_name, f'best_model{run_id}.pt'))
@@ -33,6 +33,7 @@ def supervised_train_eval_loops(epochs, patience,
         stats_dict = {'train_loss': train_loss,
                       'val_loss': val_loss,
                       'val_obj_gap': val_obj_gap,
+                      'psd_obj_gap': psd_obj_gap,
                       'lr': scheduler.optimizer.param_groups[0]["lr"]}
 
         pbar.set_postfix(stats_dict)
