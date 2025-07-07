@@ -32,16 +32,14 @@ class PPGN(BaseModel):
                  num_mlp_layers,
                  block_mlp_layers,
                  norm,
-                 act,
-                 force_psd):
+                 act):
         super().__init__(hid_dim,
                          num_encode_layers,
                          num_conv_layers,
                          num_pred_layers,
                          num_mlp_layers,
                          norm,
-                         act,
-                         force_psd)
+                         act)
 
         self.ppgns = torch.nn.ModuleList()
         for layer in range(num_conv_layers):
@@ -67,15 +65,4 @@ class PPGN(BaseModel):
             # now we do message passing
             x_dict = layer(x_dict, batch_dict, edge_index_dict, edge_attr_dict, norm_dict)
 
-        if self.ign_2to1 is not None:
-            x = x_dict['vals']
-            x_x_dense = torch.zeros(*real_x_x_mask.shape + (x.shape[-1],), device=x.device, dtype=torch.float)
-            x_x_dense[real_x_x_mask] = x
-
-            x_dense = self.ign_2to1(x_x_dense)
-            x_dense = self.predictor(x_dense).squeeze()
-            x_x_dense = torch.einsum('bn,bm->bnm', x_dense, x_dense)
-            x_x_dense = x_x_dense[real_x_x_mask]
-            return x_x_dense
-        else:
-            return self.predictor(x_dict['vals']).squeeze()
+        return self.predictor(x_dict['vals']).squeeze()

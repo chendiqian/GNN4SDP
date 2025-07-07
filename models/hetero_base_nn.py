@@ -81,8 +81,7 @@ class BaseModel(torch.nn.Module):
                  num_pred_layers,
                  num_mlp_layers,
                  norm,
-                 act,
-                 force_psd):
+                 act):
         super().__init__()
 
         self.cons_encoder = MLP([1] + [hid_dim] * num_encode_layers, act=act, norm=None)
@@ -96,7 +95,7 @@ class BaseModel(torch.nn.Module):
             ))
 
         # potentially useful, to project 2d to 1d, then outer product for PSD prediction matrix
-        self.ign_2to1 = Layer2to1(hid_dim, hid_dim, act) if force_psd else None
+        # self.ign_2to1 = Layer2to1(hid_dim, hid_dim, act) if force_psd else None
         self.predictor = MLP([hid_dim] * num_pred_layers + [1], act=act, norm=None)
 
     def init_embedding(self, data):
