@@ -6,3 +6,4 @@ gnn:
   num_pred_layers: 3
   norm: graphnorm
   act: gelu
+  force_psd: false
