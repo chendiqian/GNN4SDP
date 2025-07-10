@@ -13,6 +13,8 @@ from trainers.supervised_trainer import PlainGNNTrainer
 from trainers.training_loops import supervised_train_eval_loops
 from utils.experiment import save_run_config, setup_wandb, count_parameters
 
+torch.set_float32_matmul_precision('high')
+
 
 @hydra.main(version_base=None, config_path='./config', config_name="mpnn")
 def main(args: DictConfig):

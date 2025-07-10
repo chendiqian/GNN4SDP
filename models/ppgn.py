@@ -14,6 +14,7 @@ class PPGNBlock(torch.nn.Module):
         self.mlp = MLP([in_features] + [out_features] * mlp_layers, act=act, norm=None, plain_last=False)
         self.skip = MLP([out_features, out_features], act=act, norm=None, plain_last=False)
 
+    @torch.compile
     def forward(self, inputs):
         inputs = self.mlp(inputs)
 
