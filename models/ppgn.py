@@ -3,6 +3,7 @@ from torch_geometric.nn import MLP
 from torch_geometric.utils import to_dense_batch
 
 from models.hetero_base_nn import BaseModel
+from models.util import upper_triangle_mask
 
 
 # https://github.com/hadarser/ProvablyPowerfulGraphNetworks_torch/blob/master/layers/modules.py
@@ -10,15 +11,19 @@ class PPGNBlock(torch.nn.Module):
     def __init__(self, in_features, out_features, mlp_layers, act):
         super().__init__()
 
-        # instead of mlp1, mlp2, we have to use the same mlp to ensure symmetry
-        self.mlp = MLP([in_features] + [out_features] * mlp_layers, act=act, norm=None, plain_last=False)
+        self.mlp1 = MLP([in_features] + [out_features] * mlp_layers, act=act, norm=None, plain_last=False)
+        self.mlp2 = MLP([in_features] + [out_features] * mlp_layers, act=act, norm=None, plain_last=False)
         self.skip = MLP([out_features, out_features], act=act, norm=None, plain_last=False)
 
     @torch.compile
     def forward(self, inputs):
-        inputs = self.mlp(inputs)
+        x1 = self.mlp1(inputs)
+        x2 = self.mlp2(inputs)
 
-        mult = torch.einsum('bmnf,bnlf->bmlf', inputs, inputs)
+        mult = torch.einsum('bmnf,bnlf->bmlf', x1, x2)
+        mask = upper_triangle_mask(inputs.shape[1], x1.device)
+        mult = torch.where(mask[None, :, :, None], mult, mult.transpose(1, 2))
+
         # out = torch.cat([inputs, mult], dim=-1)
         out = self.skip(inputs + mult)
         return out
