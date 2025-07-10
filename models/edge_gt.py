@@ -5,6 +5,7 @@ from models.hetero_base_nn import BaseModel
 from models.util import upper_triangle_mask
 
 
+# https://github.com/luis-mueller/towards-principled-gts/blob/main/edge_transformer.py#L465
 class FastEdgeAttention(torch.nn.Module):
     def __init__(self, embed_dim, num_heads):
         super().__init__()
