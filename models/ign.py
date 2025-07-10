@@ -7,6 +7,7 @@ from models.hetero_base_nn import BaseModel
 
 
 # https://github.com/HyTruongSon/InvariantGraphNetworks-PyTorch/blob/master/layers/equivariant_linear_pytorch.py
+@torch.compile
 def contractions_2_to_2(inputs):
     B, N, _, F = inputs.shape
     diag_indices = torch.arange(N, device=inputs.device)
@@ -67,7 +68,6 @@ class Layer2to2(nn.Module):
         self.diag_bias = torch.nn.Parameter(torch.zeros(1, 1, 1, self.output_depth))
         self.all_bias = torch.nn.Parameter(torch.zeros(1, 1, 1, self.output_depth))
 
-    @torch.compile
     def forward(self, inputs):
         """
         :param inputs: N x m x m x D tensor
