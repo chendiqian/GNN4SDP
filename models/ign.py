@@ -7,42 +7,45 @@ from models.hetero_base_nn import BaseModel
 
 
 # https://github.com/HyTruongSon/InvariantGraphNetworks-PyTorch/blob/master/layers/equivariant_linear_pytorch.py
-def contractions_2_to_2(inputs, dim):  # N x m x m x D
-    diag_part = torch.diagonal(inputs, dim1=1, dim2=2)  # N x D x m
-    sum_diag_part = torch.mean(diag_part, dim=2, keepdim=True)  # N x D x 1
-    sum_of_rows = torch.mean(inputs, dim=2)  # N x m x D
-    sum_all = torch.mean(sum_of_rows, dim=1)  # N x D
+def contractions_2_to_2(inputs):
+    B, N, _, F = inputs.shape
+    diag_indices = torch.arange(N, device=inputs.device)
+
+    diag_part = inputs[:, diag_indices, diag_indices, :].transpose(1, 2)  # B F N
+    sum_diag_part = torch.mean(diag_part, dim=2, keepdim=True)  # B F 1
+    sum_of_rows = torch.mean(inputs, dim=2)  # B N F
+    sum_all = torch.mean(sum_of_rows, dim=1)  # B F
 
     # op1 - (1234) - extract diag
-    op1 = torch.diag_embed(diag_part, dim1=1, dim2=2)  # N x m x m x D
+    op1 = torch.diag_embed(diag_part, dim1=1, dim2=2)
 
     # op2 - (1234) + (12)(34) - place sum of diag on diag
-    op2 = torch.diag_embed(sum_diag_part.repeat(1, 1, dim), dim1=1, dim2=2)  # N x m x m x D
+    op2 = torch.diag_embed(sum_diag_part.expand(B, F, N), dim1=1, dim2=2)
 
     # op3 - (1234) + (123)(4) - place sum of row i on diag ii
-    op3 = torch.diag_embed(sum_of_rows.transpose(1, 2), dim1=1, dim2=2)  # N x m x m x D
+    op3 = torch.diag_embed(sum_of_rows.transpose(1, 2), dim1=1, dim2=2)
 
     # op5 - (1234) + (124)(3) + (123)(4) + (12)(34) + (12)(3)(4) - place sum of all entries on diag
-    op4 = torch.diag_embed(sum_all.unsqueeze(dim=2).repeat(1, 1, dim), dim1=1, dim2=2)  # N x m x m x D
+    op4 = torch.diag_embed(sum_all.unsqueeze(dim=2).expand(B, F, N), dim1=1, dim2=2)
 
     # op6 - (14)(23) + (13)(24) + (24)(1)(3) + (124)(3) + (1234) - place sum of col i on row i
-    op5 = sum_of_rows.unsqueeze(dim=1).repeat(1, dim, 1, 1)  # N x m x m x D
+    op5 = sum_of_rows.unsqueeze(dim=1).expand(B, N, N, F)
     op5 = (op5 + op5.transpose(1, 2)) / 2
 
     # op10 - (1234) + (14)(23) - identity
     op6 = inputs  # N x D x m x m
 
     # op12 - (1234) + (234)(1) - place ii element in row i
-    op7 = diag_part.transpose(1, 2).unsqueeze(dim=1).repeat(1, dim, 1, 1)
+    op7 = diag_part.transpose(1, 2).unsqueeze(dim=1).expand(B, N, N, F)
     op7 = (op7 + op7.transpose(1, 2)) / 2
 
     # op14 - (34)(1)(2) + (234)(1) + (134)(2) + (1234) + (12)(34) - place sum of diag in all entries
-    op8 = sum_diag_part.transpose(1, 2).unsqueeze(1).repeat(1, dim, dim, 1)
+    op8 = sum_diag_part.transpose(1, 2).unsqueeze(1).expand(B, N, N, F)
 
     # op15 - sum of all ops - place sum of all entries in all entries
-    op9 = sum_all[:, None, None, :].repeat(1, dim, dim, 1)
+    op9 = sum_all[:, None, None, :].expand(B, N, N, F)
 
-    return [op1, op2, op3, op4, op5, op6, op7, op8, op9]
+    return torch.stack([op1, op2, op3, op4, op5, op6, op7, op8, op9], dim=0)
 
 
 class Layer2to2(nn.Module):
@@ -70,11 +73,7 @@ class Layer2to2(nn.Module):
         :param inputs: N x m x m x D tensor
         :return: output: N x m x m x S tensor
         """
-        m = inputs.size(1)  # extract dimension
-
-        ops_out = contractions_2_to_2(inputs, m)
-        ops_out = torch.stack(ops_out, dim=0)
-
+        ops_out = contractions_2_to_2(inputs)
         output = torch.einsum('dfh,dbnmf->bnmh', self.coeffs, ops_out)
 
         # bias
