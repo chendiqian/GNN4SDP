@@ -1,5 +1,3 @@
-import pdb
-
 import torch
 from torch_geometric.utils import to_dense_batch
 
@@ -42,11 +40,12 @@ class FastEdgeAttention(torch.nn.Module):
 
         att = torch.softmax(scores, dim=2)
         val = left_v.unsqueeze(1) * right_v.unsqueeze(3)  # bnmlhf
-        mask = upper_triangle_mask(N, val.device)
-        val = torch.where(mask[None, :, None, :, None, None], val, val.transpose(1, 3))
 
         x = torch.einsum('bnmlh,bnmlhf->bnlhf', att, val)
         x = x.view(B, N, N, F)
+
+        mask = upper_triangle_mask(N, val.device)
+        x = torch.where(mask[None, :, :, None], x, x.transpose(1, 2))
         return self.olin(x + inputs)
 
 
