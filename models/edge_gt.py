@@ -20,7 +20,7 @@ class FastEdgeAttention(torch.nn.Module):
         self.v2lin = torch.nn.Linear(embed_dim, embed_dim, bias=False)
         self.olin = torch.nn.Linear(embed_dim, embed_dim, bias=False)
 
-    # @torch.compile
+    @torch.compile
     def forward(self, inputs, mask):
         # B N N F
         B, N, _, F = inputs.shape
@@ -38,7 +38,7 @@ class FastEdgeAttention(torch.nn.Module):
         right_v = right_v.view_as(right_k)
 
         scores = torch.einsum('bnmhf,bmlhf->bnmlh', left_k, right_k) / self.d_k ** 0.5
-        scores = scores.masked_fill(mask.unsqueeze(4), -1e9)
+        scores = scores.masked_fill(~mask.unsqueeze(4), -1e9)
 
         att = torch.softmax(scores, dim=2)
         val = left_v.unsqueeze(1) * right_v.unsqueeze(3)  # bnmlhf
