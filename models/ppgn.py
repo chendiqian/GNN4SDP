@@ -16,13 +16,13 @@ class PPGNBlock(torch.nn.Module):
         self.skip = MLP([out_features, out_features], act=act, norm=None, plain_last=False)
 
     @torch.compile
-    def forward(self, inputs):
-        x1 = self.mlp1(inputs)
-        x2 = self.mlp2(inputs)
+    def forward(self, inputs, mask):
+        x1 = self.mlp1(inputs).masked_fill(~mask.unsqueeze(3), 0.)
+        x2 = self.mlp2(inputs).masked_fill(~mask.unsqueeze(3), 0.)
 
         mult = torch.einsum('bmnf,bnlf->bmlf', x1, x2)
-        mask = upper_triangle_mask(inputs.shape[1], x1.device)
-        mult = torch.where(mask[None, :, :, None], mult, mult.transpose(1, 2))
+        triu_mask = upper_triangle_mask(inputs.shape[1], x1.device)
+        mult = torch.where(triu_mask[None, :, :, None], mult, mult.transpose(1, 2))
 
         # out = torch.cat([inputs, mult], dim=-1)
         out = self.skip(inputs + mult)
@@ -64,7 +64,7 @@ class PPGN(BaseModel):
             x_x_dense = torch.zeros(*real_x_x_mask.shape + (feature_dim,), device=device, dtype=torch.float)
             x_x_dense[real_x_x_mask] = x_dict['vals']
 
-            x_x_dense = self.ppgns[i](x_x_dense)
+            x_x_dense = self.ppgns[i](x_x_dense, real_x_x_mask)
             x_x_dense = x_x_dense[real_x_x_mask]
 
             x_dict['vals'] = x_x_dense

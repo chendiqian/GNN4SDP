@@ -45,8 +45,8 @@ class FastEdgeAttention(torch.nn.Module):
         x = torch.einsum('bnmlh,bnmlhf->bnlhf', att, val)
         x = x.view(B, N, N, F)
 
-        mask = upper_triangle_mask(N, val.device)
-        x = torch.where(mask[None, :, :, None], x, x.transpose(1, 2))
+        triu_mask = upper_triangle_mask(N, val.device)
+        x = torch.where(triu_mask[None, :, :, None], x, x.transpose(1, 2))
         return self.olin(x + inputs)
 
 

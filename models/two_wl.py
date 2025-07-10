@@ -15,15 +15,19 @@ class GINEConv(torch.nn.Module):
         self.mlp = MLP([hid_dim] * (num_mlp_layers + 1), act=act, norm=None, plain_last=False)
         self.eps = torch.nn.Parameter(torch.Tensor([1.]))
 
-    def forward(self, inputs):
+    @torch.compile
+    def forward(self, inputs, mask):
         # B x N x N x F
+        # B x N x N
         x = self.lin_src(inputs)
         n = x.shape[1]
-        aggr_x = x.mean(1, keepdim=True).repeat(1, n, 1, 1)  # B x N x N x F
+        aggr_x = x.sum(1) / mask.sum(2, keepdim=True).float()  # B x N x F, B x N x 1
+        aggr_x = aggr_x.unsqueeze(1).repeat(1, n, 1, 1)  # B x N x N x F
+        aggr_x = aggr_x.masked_fill(~mask.unsqueeze(3), 0.)
 
-        mask = upper_triangle_mask(n, x.device)
+        triu_mask = upper_triangle_mask(n, x.device)
         aggr_tuple = torch.cat([aggr_x, aggr_x.transpose(1, 2)], dim=-1)  # the 2WL tuple
-        aggr_tuple = torch.where(mask[None, :, :, None], aggr_tuple, aggr_tuple.transpose(1, 2))
+        aggr_tuple = torch.where(triu_mask[None, :, :, None], aggr_tuple, aggr_tuple.transpose(1, 2))
         msg = self.lin_dst(aggr_tuple)
         x_dst = (1 + self.eps) * inputs + msg
         return self.mlp(x_dst)
@@ -64,7 +68,7 @@ class TwoWL(BaseModel):
             x_x_dense = torch.zeros(*real_x_x_mask.shape + (feature_dim,), device=device, dtype=torch.float)
             x_x_dense[real_x_x_mask] = x_dict['vals']
 
-            x_x_dense = self.two_wls[i](x_x_dense)
+            x_x_dense = self.two_wls[i](x_x_dense, real_x_x_mask)
             x_x_dense = x_x_dense[real_x_x_mask]
 
             x_dict['vals'] = x_x_dense  # sum(nnodes ** 2) x F
