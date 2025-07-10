@@ -3,6 +3,7 @@ from torch_geometric.nn import MLP
 from torch_geometric.utils import to_dense_batch
 
 from models.hetero_base_nn import BaseModel
+from models.util import upper_triangle_mask
 
 
 class GINEConv(torch.nn.Module):
@@ -18,10 +19,12 @@ class GINEConv(torch.nn.Module):
         # B x N x N x F
         x = self.lin_src(inputs)
         n = x.shape[1]
-        aggr_x = x.mean(1, keepdim=True).repeat(1, n, 1, 1)  # B x 1 x N x F
+        aggr_x = x.mean(1, keepdim=True).repeat(1, n, 1, 1)  # B x N x N x F
+
+        mask = upper_triangle_mask(n, x.device)
         aggr_tuple = torch.cat([aggr_x, aggr_x.transpose(1, 2)], dim=-1)  # the 2WL tuple
+        aggr_tuple = torch.where(mask[None, :, :, None], aggr_tuple, aggr_tuple.transpose(1, 2))
         msg = self.lin_dst(aggr_tuple)
-        msg = msg + msg.transpose(1, 2)
         x_dst = (1 + self.eps) * inputs + msg
         return self.mlp(x_dst)
 
