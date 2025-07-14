@@ -39,40 +39,6 @@ class SAGEConv(MessagePassing):
         return aggr_out
 
 
-class Layer2to1(torch.nn.Module):
-    def __init__(self, input_depth, output_depth, act):
-        super().__init__()
-
-        self.input_depth = input_depth
-        self.output_depth = output_depth
-        self.act = activation_resolver(act)
-        self.basis_dimension = 2
-
-        # initialization values for variables
-        self.coeffs = torch.nn.Parameter(
-            torch.empty(self.basis_dimension, self.input_depth, self.output_depth), requires_grad=True)
-        torch.nn.init.xavier_normal_(self.coeffs)
-
-        # bias
-        self.bias = torch.nn.Parameter(torch.zeros(1, 1, self.output_depth), requires_grad=True)
-
-    def forward(self, inputs):
-        """
-        :param inputs: N x m x m x D tensor
-        :return: output: N x m x S tensor
-        """
-        t1 = torch.diagonal(inputs, dim1=1, dim2=2).transpose(1, 2)  # N x m x D
-        t2 = torch.mean(inputs, dim=1)  # N x m x D
-        inputs = torch.stack([t1, t2], dim=0)  # op x N x m x D
-
-        output = torch.einsum('dfh,dbmf->bmh', self.coeffs, inputs)  # N x S x m
-
-        # bias
-        output = output + self.bias
-
-        return self.act(output)
-
-
 class BaseModel(torch.nn.Module):
     def __init__(self,
                  hid_dim,
@@ -94,8 +60,6 @@ class BaseModel(torch.nn.Module):
                 c2v_conv=SAGEConv(hid_dim=hid_dim, num_mlp_layers=num_mlp_layers, act=act, norm=norm),
             ))
 
-        # potentially useful, to project 2d to 1d, then outer product for PSD prediction matrix
-        # self.ign_2to1 = Layer2to1(hid_dim, hid_dim, act) if force_psd else None
         self.predictor = MLP([hid_dim] * num_pred_layers + [1], act=act, norm=None)
 
     def init_embedding(self, data):
