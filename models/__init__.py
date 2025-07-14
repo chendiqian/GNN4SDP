@@ -1,6 +1,6 @@
 from .ppgn import PPGN
 from .ign import IGN
-from .mpnn import MPNN
+from .hetero_base_nn import MPNN
 from .two_wl import TwoWL
 from .edge_gt import EdgeGT
 

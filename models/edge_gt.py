@@ -1,7 +1,6 @@
 import torch
-from torch_geometric.utils import to_dense_batch
 
-from models.hetero_base_nn import BaseModel
+from models.hetero_higher_order import HigherOrder
 from models.util import upper_triangle_mask
 
 
@@ -20,7 +19,7 @@ class FastEdgeAttention(torch.nn.Module):
         self.olin = torch.nn.Linear(embed_dim, embed_dim, bias=False)
 
     @torch.compile
-    def forward(self, inputs, mask):
+    def forward(self, inputs, mask=None):
         # B N N F
         B, N, _, F = inputs.shape
 
@@ -37,7 +36,8 @@ class FastEdgeAttention(torch.nn.Module):
         right_v = right_v.view_as(right_k)
 
         scores = torch.einsum('bnmhf,bmlhf->bnmlh', left_k, right_k) / self.d_k ** 0.5
-        scores = scores.masked_fill(~mask.unsqueeze(4), -1e9)
+        if mask is not None:
+            scores = scores.masked_fill(~mask.unsqueeze(4), -1e9)
 
         att = torch.softmax(scores, dim=2)
         val = left_v.unsqueeze(1) * right_v.unsqueeze(3)  # bnmlhf
@@ -50,7 +50,7 @@ class FastEdgeAttention(torch.nn.Module):
         return self.olin(x + inputs)
 
 
-class EdgeGT(BaseModel):
+class EdgeGT(HigherOrder):
     def __init__(self,
                  hid_dim,
                  num_encode_layers,
@@ -68,29 +68,6 @@ class EdgeGT(BaseModel):
                          norm,
                          act)
 
-        self.gt_layers = torch.nn.ModuleList()
+        self.higher_orders = torch.nn.ModuleList()
         for layer in range(num_conv_layers):
-            self.gt_layers.append(FastEdgeAttention(hid_dim, num_head))
-
-    def forward(self, data):
-        batch_dict, edge_index_dict, edge_attr_dict, norm_dict, x_dict = self.init_embedding(data)
-
-        _, real_x_mask = to_dense_batch(x_dict['vals'].new_empty(batch_dict['_vals'].shape[0]),
-                                        batch_dict['_vals'])  # B x Nmax x F
-        real_x_x_mask = torch.einsum('bn,bm->bnm', real_x_mask, real_x_mask)  # B x Nmax x Nmax
-        real_x_x_x_mask = torch.einsum('bnm,bml->bnml', real_x_x_mask, real_x_x_mask)
-        feature_dim = x_dict['vals'].shape[-1]
-        device = x_dict['vals'].device
-
-        for i, layer in enumerate(self.gcns):
-            x_x_dense = torch.zeros(*real_x_x_mask.shape + (feature_dim,), device=device, dtype=torch.float)
-            x_x_dense[real_x_x_mask] = x_dict['vals']
-
-            x_x_dense = self.gt_layers[i](x_x_dense, real_x_x_x_mask)
-            x_x_dense = x_x_dense[real_x_x_mask]
-
-            x_dict['vals'] = x_x_dense  # sum(nnodes ** 2) x F
-            # now we do message passing
-            x_dict = layer(x_dict, batch_dict, edge_index_dict, edge_attr_dict, norm_dict)
-
-        return self.predictor(x_dict['vals']).squeeze()
+            self.higher_orders.append(FastEdgeAttention(hid_dim, num_head))

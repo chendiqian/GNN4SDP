@@ -1,9 +1,8 @@
 import torch
 import torch.nn as nn
 from torch_geometric.nn.resolver import activation_resolver
-from torch_geometric.utils import to_dense_batch
 
-from models.hetero_base_nn import BaseModel
+from models.hetero_higher_order import HigherOrder
 
 
 # https://github.com/HyTruongSon/InvariantGraphNetworks-PyTorch/blob/master/layers/equivariant_linear_pytorch.py
@@ -68,7 +67,7 @@ class Layer2to2(nn.Module):
         self.diag_bias = torch.nn.Parameter(torch.zeros(1, 1, 1, self.output_depth))
         self.all_bias = torch.nn.Parameter(torch.zeros(1, 1, 1, self.output_depth))
 
-    def forward(self, inputs):
+    def forward(self, inputs, *args):
         """
         :param inputs: N x m x m x D tensor
         :return: output: N x m x m x S tensor
@@ -83,7 +82,7 @@ class Layer2to2(nn.Module):
         return self.act(output)
 
 
-class IGN(BaseModel):
+class IGN(HigherOrder):
     def __init__(self,
                  hid_dim,
                  num_encode_layers,
@@ -100,28 +99,6 @@ class IGN(BaseModel):
                          norm,
                          act)
 
-        self.igns = torch.nn.ModuleList()
+        self.higher_orders = torch.nn.ModuleList()
         for layer in range(num_conv_layers):
-            self.igns.append(Layer2to2(hid_dim, hid_dim, act))
-
-    def forward(self, data):
-        batch_dict, edge_index_dict, edge_attr_dict, norm_dict, x_dict = self.init_embedding(data)
-
-        _, real_x_mask = to_dense_batch(x_dict['vals'].new_empty(batch_dict['_vals'].shape[0]),
-                                        batch_dict['_vals'])  # B x Nmax x F
-        real_x_x_mask = torch.einsum('bn,bm->bnm', real_x_mask, real_x_mask)  # B x Nmax x Nmax
-        feature_dim = x_dict['vals'].shape[-1]
-        device = x_dict['vals'].device
-
-        for i, layer in enumerate(self.gcns):
-            x_x_dense = torch.zeros(*real_x_x_mask.shape + (feature_dim,), device=device, dtype=torch.float)
-            x_x_dense[real_x_x_mask] = x_dict['vals']
-
-            x_x_dense = self.igns[i](x_x_dense)
-            x_x_dense = x_x_dense[real_x_x_mask]
-
-            x_dict['vals'] = x_x_dense  # sum(nnodes ** 2) x F
-            # now we do message passing
-            x_dict = layer(x_dict, batch_dict, edge_index_dict, edge_attr_dict, norm_dict)
-
-        return self.predictor(x_dict['vals']).squeeze()
+            self.higher_orders.append(Layer2to2(hid_dim, hid_dim, act))
