@@ -1,28 +1,27 @@
-from typing import List, Tuple
-
+import cvxpy as cp
 import numpy as np
-import torch
-from torch.nn import functional as F
-from torch_geometric.data import HeteroData
-from torch_geometric.utils import scatter
-from torch_sparse import SparseTensor, spmm
+from torch_sparse import SparseTensor
 
 
-# def recover_qp_from_data(data, dtype=np.float32):
-#     data = data.to('cpu')
-#     c = data.q.numpy().astype(dtype)
-#     b = data.b.numpy().astype(dtype)
-#     A = SparseTensor(row=data['cons', 'to', 'vals'].edge_index[0],
-#                      col=data['cons', 'to', 'vals'].edge_index[1],
-#                      value=data['cons', 'to', 'vals'].edge_attr.squeeze(),
-#                      sparse_sizes=(data['cons'].num_nodes, data['vals'].num_nodes)).to_scipy('csr').toarray().astype(dtype)
-#     P = SparseTensor(row=data['vals', 'to', 'vals'].edge_index[0],
-#                      col=data['vals', 'to', 'vals'].edge_index[1],
-#                      value=data['vals', 'to', 'vals'].edge_attr.squeeze(),
-#                      sparse_sizes=(data['vals'].num_nodes, data['vals'].num_nodes)).to_scipy('csr').toarray().astype(dtype)
-#     lb = np.zeros(A.shape[1]).astype(dtype)
-#     ub = None
-#     return P, A, c, b, lb, ub
+def recover_sdp_from_data(data, dtype=np.float32):
+    data = data.to('cpu')
+    b = data.b.numpy().astype(dtype)
+    # m * n^2
+    A = SparseTensor(row=data['cons', 'to', 'vals'].edge_index[0],
+                     col=data['cons', 'to', 'vals'].edge_index[1],
+                     value=data['cons', 'to', 'vals'].edge_attr.squeeze(),
+                     sparse_sizes=(data['cons'].num_nodes, data['vals'].num_nodes)).to_scipy('csr').toarray().astype(dtype)
+    m = A.shape[0]
+    n = int(A.shape[1] ** 0.5)
+    A = A.T.reshape(n, n, m)
+
+    C = SparseTensor(row=data['obj', 'to', 'vals'].edge_index[0],
+                     col=data['obj', 'to', 'vals'].edge_index[1],
+                     value=data['obj', 'to', 'vals'].edge_attr.squeeze(),
+                     sparse_sizes=(1, data['vals'].num_nodes)).to_scipy('csr').toarray().astype(dtype)
+    C = C.squeeze(0).reshape(n, n)
+
+    return A, C, b
 
 
 def normalize_cons(A, b):
@@ -35,3 +34,27 @@ def normalize_cons(A, b):
     A = Ab[:, :-1]
     b = Ab[:, -1]
     return A, b
+
+
+def solve_sdp_cvxpy(C, A, b, norm_strength=0.):
+    N = C.shape[0]
+    M = A.shape[-1]
+    # Define and solve the CVXPY problem.
+    # Create a symmetric matrix variable.
+    X = cp.Variable((N, N), PSD=True)
+
+    # The operator >> denotes matrix inequality.
+    # constraints = [X >> 0]
+    constraints = [cp.trace(A[..., i] @ X) == b[i] for i in range(M)]
+    objective = cp.trace(C @ X)
+    # wrt the min norm
+    if norm_strength > 0:
+        objective += cp.sum_squares(X) * norm_strength
+    prob = cp.Problem(cp.Minimize(objective), constraints)
+    prob.solve(verbose=False, solver=cp.MOSEK)
+
+    # Print result.
+    sol = prob.value
+    X = X.value
+
+    return sol, X, prob.status, prob.solver_stats.solve_time
