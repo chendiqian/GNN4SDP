@@ -45,17 +45,17 @@ def main(args: DictConfig):
     test_sampler = DistributedSampler(test_set, num_replicas=world_size, rank=rank)
 
     train_loader = DataLoader(train_set,
-                              batch_size=args.train.batchsize,
+                              batch_size=args.train.batchsize // world_size,
                               collate_fn=collate_fn_lp_base,
                               pin_memory=True,
                               sampler=train_sampler)
     val_loader = DataLoader(valid_set,
-                            batch_size=args.train.batchsize * 2,
+                            batch_size=args.train.batchsize * 2 // world_size,
                             collate_fn=collate_fn_lp_base,
                             pin_memory=True,
                             sampler=val_sampler)
     test_loader = DataLoader(test_set,
-                             batch_size=args.train.batchsize * 2,
+                             batch_size=args.train.batchsize * 2 // world_size,
                              collate_fn=collate_fn_lp_base,
                              pin_memory=True,
                              sampler=test_sampler)
