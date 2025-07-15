@@ -6,8 +6,6 @@ from torch import Tensor
 from torch_geometric.utils import cumsum, degree, unbatch
 from torch_scatter import scatter
 
-device = 'cuda' if torch.cuda.is_available() else 'cpu'
-
 
 def unbatch_edge_index(
         edge_index: Tensor,
@@ -40,7 +38,7 @@ class PlainGNNTrainer:
         optimizer.step()
         return loss.detach()
 
-    def train(self, dataloader, model, optimizer):
+    def train(self, dataloader, model, optimizer, device):
         model.train()
 
         train_losses = 0.
@@ -55,7 +53,7 @@ class PlainGNNTrainer:
         return train_losses.item() / num_graphs
 
     @torch.no_grad()
-    def eval(self, dataloader, model):
+    def eval(self, dataloader, model, device):
         model.eval()
 
         val_losses = 0.
