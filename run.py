@@ -65,7 +65,7 @@ def main(args: DictConfig):
                                                          patience=int(args.train.patience * 0.6),
                                                          min_lr=1.e-5)
 
-        trainer = PlainGNNTrainer()
+        trainer = PlainGNNTrainer(args.train.accum)
 
         pbar = tqdm(range(args.train.epoch))
         for epoch in pbar:

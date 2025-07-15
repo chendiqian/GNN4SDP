@@ -82,7 +82,7 @@ def main(args: DictConfig):
                                                          patience=int(args.train.patience * 0.6),
                                                          min_lr=1.e-5)
 
-        trainer = PlainGNNTrainer()
+        trainer = PlainGNNTrainer(args.train.accum)
 
         for epoch in range(args.train.epoch):
             train_sampler.set_epoch(epoch)
