@@ -50,7 +50,7 @@ class PlainGNNTrainer:
             train_losses += loss * data.num_graphs
             num_graphs += data.num_graphs
 
-        return train_losses.item() / num_graphs
+        return train_losses / num_graphs
 
     @torch.no_grad()
     def eval(self, dataloader, model, device):
@@ -101,6 +101,6 @@ class PlainGNNTrainer:
             projected_objgaps.append(np.abs(objs - obj_gt) / np.maximum(np.abs(objs), np.abs(obj_gt)))
             objgaps.append(obj_gap)
 
-        objgaps = torch.cat(objgaps, dim=0).mean().item()
+        objgaps = torch.cat(objgaps, dim=0).mean()
         projected_objgaps = np.concatenate(projected_objgaps, axis=0).mean().item()
-        return val_losses.item() / num_graphs, objgaps, projected_objgaps
+        return val_losses / num_graphs, objgaps, torch.tensor(projected_objgaps, device=device).float()

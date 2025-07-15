@@ -69,8 +69,11 @@ def main(args: DictConfig):
 
         pbar = tqdm(range(args.train.epoch))
         for epoch in pbar:
-            train_loss = trainer.train(train_loader, model, optimizer, device)
+            train_loss = trainer.train(train_loader, model, optimizer, device).item()
             val_loss, val_obj_gap, psd_obj_gap = trainer.eval(val_loader, model, device)
+            val_loss = val_loss.item()
+            val_obj_gap = val_obj_gap.item()
+            psd_obj_gap = psd_obj_gap.item()
 
             if scheduler is not None:
                 scheduler.step(psd_obj_gap)
