@@ -24,31 +24,33 @@ def unbatch_edge_index(
 
 
 class PlainGNNTrainer:
-    def __init__(self):
+    def __init__(self, accum):
         self.best_objgap = 1.e8
         self.patience = 0
-
-    def train_step(self, data, label, model, optimizer):
-        optimizer.zero_grad()
-        pred = model(data)
-        loss = scatter((pred - label) ** 2, data.batch_dict['vals'], dim=0, reduce='mean')
-        loss = loss.mean()
-        loss.backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0, error_if_nonfinite=True)
-        optimizer.step()
-        return loss.detach()
+        self.accum = accum
 
     def train(self, dataloader, model, optimizer, device):
         model.train()
 
         train_losses = 0.
         num_graphs = 0
+        optimizer.zero_grad()
         for i, data in enumerate(dataloader):
             data = data.to(device)
             label = data.x_solution
-            loss = self.train_step(data, label, model, optimizer)
-            train_losses += loss * data.num_graphs
+
+            pred = model(data)
+            loss = scatter((pred - label) ** 2, data.batch_dict['vals'], dim=0, reduce='mean')
+            loss = loss.mean()
+            train_losses += loss.detach() * data.num_graphs
             num_graphs += data.num_graphs
+
+            loss = loss / self.accum
+            loss.backward()
+            if (i + 1) % self.accum == 0 or (i + 1) == len(dataloader):
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0, error_if_nonfinite=True)
+                optimizer.step()
+                optimizer.zero_grad()
 
         return train_losses / num_graphs
 

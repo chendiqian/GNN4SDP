@@ -13,3 +13,4 @@ train:
   epoch: 1000
   patience: 100
   batchsize: 128
+  accum: 1
