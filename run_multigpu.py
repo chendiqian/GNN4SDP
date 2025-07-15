@@ -46,19 +46,16 @@ def main(args: DictConfig):
 
     train_loader = DataLoader(train_set,
                               batch_size=args.train.batchsize,
-                              shuffle=True,
                               collate_fn=collate_fn_lp_base,
                               pin_memory=True,
                               sampler=train_sampler)
     val_loader = DataLoader(valid_set,
                             batch_size=args.train.batchsize * 2,
-                            shuffle=False,
                             collate_fn=collate_fn_lp_base,
                             pin_memory=True,
                             sampler=val_sampler)
     test_loader = DataLoader(test_set,
                              batch_size=args.train.batchsize * 2,
-                             shuffle=False,
                              collate_fn=collate_fn_lp_base,
                              pin_memory=True,
                              sampler=test_sampler)
