@@ -1,3 +1,6 @@
+import copy
+import os
+
 import hydra
 import numpy as np
 import torch
@@ -5,12 +8,12 @@ import wandb
 from omegaconf import DictConfig
 from torch import optim
 from torch.utils.data import DataLoader
+from tqdm import tqdm
 
 from data.collate_func import collate_fn_lp_base
 from data.dataset import LPDataset
 from models import get_model
-from trainers.supervised_trainer import PlainGNNTrainer
-from trainers.training_loops import supervised_train_eval_loops
+from trainer import PlainGNNTrainer
 from utils.experiment import save_run_config, setup_wandb, count_parameters
 
 torch.set_float32_matmul_precision('high')
@@ -53,6 +56,8 @@ def main(args: DictConfig):
 
     for run in range(args.train.runs):
         model = get_model(args.gnn).to(device)
+        best_model = copy.deepcopy(model.state_dict())
+
         optimizer = optim.Adam(model.parameters(), lr=args.train.lr, weight_decay=args.train.weight_decay)
         scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer,
                                                          mode='min',
@@ -62,11 +67,37 @@ def main(args: DictConfig):
 
         trainer = PlainGNNTrainer()
 
-        best_model = supervised_train_eval_loops(args.train.epoch, args.train.patience, args.train.ckpt,
-                                                 run, log_folder_name,
-                                                 trainer, train_loader, val_loader, model, optimizer, scheduler)
+        pbar = tqdm(range(args.train.epoch))
+        for epoch in pbar:
+            train_loss = trainer.train(train_loader, model, optimizer, device)
+            val_loss, val_obj_gap, psd_obj_gap = trainer.eval(val_loader, model, device)
+
+            if scheduler is not None:
+                scheduler.step(psd_obj_gap)
+
+            if trainer.best_objgap > psd_obj_gap:
+                trainer.patience = 0
+                trainer.best_objgap = psd_obj_gap
+                best_model = copy.deepcopy(model.state_dict())
+                if args.train.ckpt:
+                    torch.save(model.state_dict(), os.path.join(log_folder_name, f'best_model{run}.pt'))
+            else:
+                trainer.patience += 1
+
+            if trainer.patience > args.train.patience:
+                break
+
+            stats_dict = {'train_loss': train_loss,
+                          'val_loss': val_loss,
+                          'val_obj_gap': val_obj_gap,
+                          'psd_obj_gap': psd_obj_gap,
+                          'lr': scheduler.optimizer.param_groups[0]["lr"]}
+
+            pbar.set_postfix(stats_dict)
+            wandb.log(stats_dict)
+
         model.load_state_dict(best_model)
-        _, test_obj_gap, psd_obj_gap = trainer.eval(test_loader, model)
+        _, test_obj_gap, psd_obj_gap = trainer.eval(test_loader, model, device)
 
         best_val_objgaps.append(trainer.best_objgap)
         test_objgaps.append(test_obj_gap)
