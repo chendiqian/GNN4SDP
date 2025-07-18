@@ -70,17 +70,16 @@ def main(args: DictConfig):
         pbar = tqdm(range(args.train.epoch))
         for epoch in pbar:
             train_loss = trainer.train(train_loader, model, optimizer, device).item()
-            val_loss, val_obj_gap, psd_obj_gap = trainer.eval(val_loader, model, device)
+            val_loss, val_obj_gap, _ = trainer.eval(val_loader, model, device, False)
             val_loss = val_loss.item()
             val_obj_gap = val_obj_gap.item()
-            psd_obj_gap = psd_obj_gap.item()
 
             if scheduler is not None:
-                scheduler.step(psd_obj_gap)
+                scheduler.step(val_obj_gap)
 
-            if trainer.best_objgap > psd_obj_gap:
+            if trainer.best_objgap > val_obj_gap:
                 trainer.patience = 0
-                trainer.best_objgap = psd_obj_gap
+                trainer.best_objgap = val_obj_gap
                 best_model = copy.deepcopy(model.state_dict())
                 if args.train.ckpt:
                     torch.save(model.state_dict(), os.path.join(log_folder_name, f'best_model{run}.pt'))
@@ -93,14 +92,13 @@ def main(args: DictConfig):
             stats_dict = {'train_loss': train_loss,
                           'val_loss': val_loss,
                           'val_obj_gap': val_obj_gap,
-                          'psd_obj_gap': psd_obj_gap,
                           'lr': scheduler.optimizer.param_groups[0]["lr"]}
 
             pbar.set_postfix(stats_dict)
             wandb.log(stats_dict)
 
         model.load_state_dict(best_model)
-        _, test_obj_gap, psd_obj_gap = trainer.eval(test_loader, model, device)
+        _, test_obj_gap, psd_obj_gap = trainer.eval(test_loader, model, device, True)
 
         best_val_objgaps.append(trainer.best_objgap)
         test_objgaps.append(test_obj_gap)

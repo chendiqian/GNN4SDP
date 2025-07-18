@@ -87,20 +87,19 @@ def main(args: DictConfig):
         for epoch in range(args.train.epoch):
             train_sampler.set_epoch(epoch)
             train_loss = trainer.train(train_loader, model, optimizer, local_rank)
-            val_loss, val_obj_gap, psd_obj_gap = trainer.eval(val_loader, model, local_rank)
+            val_loss, val_obj_gap, _ = trainer.eval(val_loader, model, local_rank, False)
 
             dist.all_reduce(train_loss, op=dist.ReduceOp.AVG)
             dist.all_reduce(val_loss, op=dist.ReduceOp.AVG)
             dist.all_reduce(val_obj_gap, op=dist.ReduceOp.AVG)
-            dist.all_reduce(psd_obj_gap, op=dist.ReduceOp.AVG)
 
-            psd_obj_gap = psd_obj_gap.item()
+            val_obj_gap = val_obj_gap.item()
             if scheduler is not None:
-                scheduler.step(psd_obj_gap)
+                scheduler.step(val_obj_gap)
 
-            if trainer.best_objgap > psd_obj_gap:
+            if trainer.best_objgap > val_obj_gap:
                 trainer.patience = 0
-                trainer.best_objgap = psd_obj_gap
+                trainer.best_objgap = val_obj_gap
                 best_model = copy.deepcopy(model.state_dict())
                 if args.train.ckpt and rank == 0:
                     torch.save(model.state_dict(), os.path.join(log_folder_name, f'best_model{run}.pt'))
@@ -114,14 +113,13 @@ def main(args: DictConfig):
                 stats_dict = {'train_loss': train_loss,
                               'val_loss': val_loss,
                               'val_obj_gap': val_obj_gap,
-                              'psd_obj_gap': psd_obj_gap,
                               'lr': scheduler.optimizer.param_groups[0]["lr"]}
                 wandb.log(stats_dict)
                 logger.info(', '.join([k + f':{v:.5f}' for k, v in stats_dict.items()]))
 
         dist.barrier()
         model.load_state_dict(best_model)
-        _, test_obj_gap, psd_obj_gap = trainer.eval(test_loader, model, local_rank)
+        _, test_obj_gap, psd_obj_gap = trainer.eval(test_loader, model, local_rank, True)
 
         dist.all_reduce(test_obj_gap, op=dist.ReduceOp.AVG)
         dist.all_reduce(psd_obj_gap, op=dist.ReduceOp.AVG)
