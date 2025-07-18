@@ -11,6 +11,6 @@ train:
   lr: 1.e-3
   weight_decay: 0.
   epoch: 1000
-  patience: 100
-  batchsize: 128
+  patience: 200
+  batchsize: 256
   accum: 1
