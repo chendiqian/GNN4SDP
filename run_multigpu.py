@@ -63,6 +63,7 @@ def main(args: DictConfig):
         log_folder_name = save_run_config(args)
         setup_wandb(args)
         best_val_objgaps = []
+        test_losses = []
         test_objgaps = []
         psd_obj_gaps = []
 
@@ -119,23 +120,28 @@ def main(args: DictConfig):
 
         dist.barrier()
         model.load_state_dict(best_model)
-        _, test_obj_gap, psd_obj_gap = trainer.eval(test_loader, model, local_rank, True)
+        test_loss, test_obj_gap, psd_obj_gap = trainer.eval(test_loader, model, local_rank, True)
 
+        dist.all_reduce(test_loss, op=dist.ReduceOp.AVG)
         dist.all_reduce(test_obj_gap, op=dist.ReduceOp.AVG)
         dist.all_reduce(psd_obj_gap, op=dist.ReduceOp.AVG)
         dist.barrier()
         test_obj_gap = test_obj_gap.item()
         psd_obj_gap = psd_obj_gap.item()
+        test_loss = test_loss.item()
 
         if rank == 0:
             best_val_objgaps.append(trainer.best_objgap)
             test_objgaps.append(test_obj_gap)
             psd_obj_gaps.append(psd_obj_gap)
+            test_losses.append(test_loss)
 
     if rank == 0:
         wandb.log({
             'num_params': count_parameters(model),
             'best_val_obj_gap': np.mean(best_val_objgaps),
+            'test_loss_mean': np.mean(test_losses),
+            'test_loss_std': np.std(test_losses),
             'test_obj_gap_mean': np.mean(test_objgaps),
             'test_obj_gap_std': np.std(test_objgaps),
             'test_psd_obj_gap_mean': np.mean(psd_obj_gaps),

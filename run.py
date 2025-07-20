@@ -51,6 +51,7 @@ def main(args: DictConfig):
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     best_val_objgaps = []
+    test_losses = []
     test_objgaps = []
     psd_obj_gaps = []
 
@@ -98,15 +99,18 @@ def main(args: DictConfig):
             wandb.log(stats_dict)
 
         model.load_state_dict(best_model)
-        _, test_obj_gap, psd_obj_gap = trainer.eval(test_loader, model, device, True)
+        test_loss, test_obj_gap, psd_obj_gap = trainer.eval(test_loader, model, device, True)
 
         best_val_objgaps.append(trainer.best_objgap)
-        test_objgaps.append(test_obj_gap)
-        psd_obj_gaps.append(psd_obj_gap)
+        test_losses.append(test_loss.item())
+        test_objgaps.append(test_obj_gap.item())
+        psd_obj_gaps.append(psd_obj_gap.item())
 
     wandb.log({
         'num_params': count_parameters(model),
         'best_val_obj_gap': np.mean(best_val_objgaps),
+        'test_loss_mean': np.mean(test_losses),
+        'test_loss_std': np.std(test_losses),
         'test_obj_gap_mean': np.mean(test_objgaps),
         'test_obj_gap_std': np.std(test_objgaps),
         'test_psd_obj_gap_mean': np.mean(psd_obj_gaps),
