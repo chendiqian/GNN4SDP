@@ -8,3 +8,4 @@ defaults:
 gnn:
   type: ppgn
   block_mlp_layers: 1
+  layernorm: false

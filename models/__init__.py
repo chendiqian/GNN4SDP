@@ -29,6 +29,7 @@ def get_model(args):
                      num_pred_layers=args.num_pred_layers,
                      num_mlp_layers=args.num_mlp_layers,
                      block_mlp_layers=args.block_mlp_layers,
+                     layernorm=args.layernorm,
                      norm=args.norm,
                      act=args.act)
     elif args.type == '2wl':
