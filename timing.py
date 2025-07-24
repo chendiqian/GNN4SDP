@@ -33,10 +33,13 @@ def main(args: DictConfig):
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     model = get_model(args.gnn).to(device)
-    batch = next(iter(test_loader)).to(device)
-    for _ in range(20):
-        # warm sta GPU
-        _ = model(batch)
+    if device == 'cuda':
+        for data in test_loader:
+            # warm sta GPU
+            data = data.to(device)
+            sync_timer()
+            _ = model(data)
+            sync_timer()
 
     times = []
     for data in tqdm(test_loader):
@@ -45,6 +48,7 @@ def main(args: DictConfig):
         _ = model.predict_single(data)
         t2 = sync_timer()
         times.append(t2 - t1)
+    print(times)
 
     wandb.log({
         'time_mean': np.mean(times),
