@@ -33,21 +33,22 @@ def main(args: DictConfig):
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     model = get_model(args.gnn).to(device)
-    for data in test_loader:
-        # warm sta GPU
-        data = data.to(device)
-        sync_timer()
-        _ = model(data)
-        sync_timer()
+    with torch.no_grad():
+        for data in test_loader:
+            # warm sta GPU
+            data = data.to(device)
+            sync_timer()
+            _ = model(data)
+            sync_timer()
 
     times = []
-    for data in tqdm(test_loader):
-        data = data.to(device)
-        t1 = sync_timer()
-        _ = model.predict_single(data)
-        t2 = sync_timer()
-        times.append(t2 - t1)
-    print(times)
+    with torch.no_grad():
+        for data in tqdm(test_loader):
+            data = data.to(device)
+            t1 = sync_timer()
+            _ = model.predict_single(data)
+            t2 = sync_timer()
+            times.append(t2 - t1)
 
     wandb.log({
         'time_mean': np.mean(times),
