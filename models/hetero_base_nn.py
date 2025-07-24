@@ -85,3 +85,6 @@ class MPNN(torch.nn.Module):
             x_dict = layer(x_dict, batch_dict, edge_index_dict, edge_attr_dict, norm_dict)
 
         return self.predictor(x_dict['vals']).squeeze()
+
+    def predict_single(self, data):
+        return self.forward(data)
