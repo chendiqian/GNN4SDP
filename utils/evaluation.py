@@ -36,7 +36,7 @@ def normalize_cons(A, b):
     return A, b
 
 
-def solve_sdp_cvxpy(C, A, b, norm_strength=0.):
+def solve_sdp_cvxpy(C, A, b, norm_strength=0., solver='mosek'):
     N = C.shape[0]
     M = A.shape[-1]
     # Define and solve the CVXPY problem.
@@ -51,7 +51,7 @@ def solve_sdp_cvxpy(C, A, b, norm_strength=0.):
     if norm_strength > 0:
         objective += cp.sum_squares(X) * norm_strength
     prob = cp.Problem(cp.Minimize(objective), constraints)
-    prob.solve(verbose=False, solver=cp.MOSEK)
+    prob.solve(verbose=False, solver=getattr(cp, solver.upper()))
 
     # Print result.
     sol = prob.value
