@@ -1,6 +1,70 @@
 import cvxpy as cp
 import numpy as np
+import scs
+from scipy import sparse
 from torch_sparse import SparseTensor
+
+
+# The vec function as documented in api/cones
+def vec(S):
+    n = S.shape[0]
+    S = np.copy(S)
+    S *= np.sqrt(2)
+    S[range(n), range(n)] /= np.sqrt(2)
+    return S[np.triu_indices(n)]
+
+
+def map_vec(S):
+    n = S.shape[0]
+    S = np.copy(S)
+    S *= np.sqrt(2)
+    S[range(n), range(n), :] /= np.sqrt(2)
+    idx = np.triu_indices(n)
+    return S[idx[0], idx[1], :].T
+
+
+# The mat function as documented in api/cones
+def mat(s):
+    n = int((np.sqrt(8 * len(s) + 1) - 1) / 2)
+    S = np.zeros((n, n))
+    S[np.triu_indices(n)] = s / np.sqrt(2)
+    S = S + S.T
+    S[range(n), range(n)] /= np.sqrt(2)
+    return S
+
+
+def solve_sdp_scs(C, A, b, warm_start=False, x=None, y=None, s=None):
+    m = A.shape[-1]
+    n = C.shape[0]
+    nvec = (n + 1) * n // 2
+
+    c = vec(C)
+    A_eq = map_vec(A)
+    # A_eq = np.stack([vec(A[..., i]) for i in range(m)], axis=0)
+
+    A_sp = sparse.vstack(
+        [
+            # zero cone
+            A_eq,
+            # positive semidefinite cone
+            -sparse.eye(nvec),
+        ],
+        format="csc",
+    )
+    b = np.hstack([b, np.zeros(nvec)])
+
+    data = dict(A=A_sp, b=b, c=c)
+    # zero cone: m equalities, spd cone: n times n
+    cone = dict(z=m, s=n)
+    # Setup workspace
+    solver = scs.SCS(data, cone)
+    sol = solver.solve(warm_start, x, y, s)
+    if sol['info']['status'] == 'solved':
+        X = mat(sol["x"])
+    else:
+        X = None
+
+    return X, sol, sol['info']['solve_time'] / 1000
 
 
 def recover_sdp_from_data(data, dtype=np.float32):
@@ -22,18 +86,6 @@ def recover_sdp_from_data(data, dtype=np.float32):
     C = C.squeeze(0).reshape(n, n)
 
     return A, C, b
-
-
-def normalize_cons(A, b):
-    if A is None or b is None:
-        return A, b
-    Ab = np.concatenate([A, b[:, None]], axis=1)
-    max_logit = np.abs(Ab).max(axis=1)
-    max_logit[max_logit == 0] = 1.
-    Ab = Ab / max_logit[:, None]
-    A = Ab[:, :-1]
-    b = Ab[:, -1]
-    return A, b
 
 
 def solve_sdp_cvxpy(C, A, b, norm_strength=0., solver='mosek'):
