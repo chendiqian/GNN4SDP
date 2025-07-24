@@ -33,13 +33,12 @@ def main(args: DictConfig):
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     model = get_model(args.gnn).to(device)
-    if device == 'cuda':
-        for data in test_loader:
-            # warm sta GPU
-            data = data.to(device)
-            sync_timer()
-            _ = model(data)
-            sync_timer()
+    for data in test_loader:
+        # warm sta GPU
+        data = data.to(device)
+        sync_timer()
+        _ = model(data)
+        sync_timer()
 
     times = []
     for data in tqdm(test_loader):
