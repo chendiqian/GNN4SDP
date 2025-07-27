@@ -103,7 +103,7 @@ def main(args: DictConfig):
                 trainer.best_objgap = val_obj_gap
                 best_model = copy.deepcopy(model.state_dict())
                 if args.train.ckpt and rank == 0:
-                    torch.save(model.state_dict(), os.path.join(log_folder_name, f'best_model{run}.pt'))
+                    torch.save(model.module.state_dict(), os.path.join(log_folder_name, f'best_model{run}.pt'))
             else:
                 trainer.patience += 1
 
