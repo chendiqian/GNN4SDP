@@ -43,7 +43,7 @@ class MPNN(torch.nn.Module):
     def __init__(self,
                  hid_dim,
                  num_encode_layers,
-                 num_conv_layers,
+                 num_gnn_layers,
                  num_pred_layers,
                  num_mlp_layers,
                  norm,
@@ -54,7 +54,8 @@ class MPNN(torch.nn.Module):
         self.vals_encoder = MLP([1] + [hid_dim] * num_encode_layers, act=act, norm=None)
 
         self.gcns = torch.nn.ModuleList()
-        for layer in range(num_conv_layers):
+        assert num_gnn_layers > 0
+        for layer in range(num_gnn_layers):
             self.gcns.append(HeteroConvLayer(
                 v2c_conv=SAGEConv(hid_dim=hid_dim, num_mlp_layers=num_mlp_layers, act=act, norm=norm),
                 c2v_conv=SAGEConv(hid_dim=hid_dim, num_mlp_layers=num_mlp_layers, act=act, norm=norm),

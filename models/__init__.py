@@ -9,12 +9,13 @@ def get_model(args):
     if args.type == 'mpnn':
         model = MPNN(hid_dim=args.hidden,
                      num_encode_layers=args.num_encode_layers,
-                     num_conv_layers=args.num_conv_layers,
+                     num_gnn_layers=args.num_gnn_layers,
                      num_pred_layers=args.num_pred_layers,
                      num_mlp_layers=args.num_mlp_layers,
                      norm=args.norm,
                      act=args.act)
     elif args.type == 'ign':
+        raise NotImplementedError
         model = IGN(hid_dim=args.hidden,
                     num_encode_layers=args.num_encode_layers,
                     num_conv_layers=args.num_conv_layers,
@@ -25,6 +26,7 @@ def get_model(args):
     elif args.type == 'ppgn':
         model = PPGN(hid_dim=args.hidden,
                      num_encode_layers=args.num_encode_layers,
+                     num_gnn_layers=args.num_gnn_layers,
                      num_conv_layers=args.num_conv_layers,
                      num_pred_layers=args.num_pred_layers,
                      num_mlp_layers=args.num_mlp_layers,
@@ -33,6 +35,7 @@ def get_model(args):
                      norm=args.norm,
                      act=args.act)
     elif args.type == '2wl':
+        raise NotImplementedError
         model = TwoWL(hid_dim=args.hidden,
                       num_encode_layers=args.num_encode_layers,
                       num_conv_layers=args.num_conv_layers,
@@ -42,6 +45,7 @@ def get_model(args):
                       norm=args.norm,
                       act=args.act)
     elif args.type == 'edge_gt':
+        raise NotImplementedError
         model = EdgeGT(
             hid_dim=args.hidden,
             num_encode_layers=args.num_encode_layers,

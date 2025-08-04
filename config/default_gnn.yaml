@@ -1,6 +1,7 @@
 gnn:
   hidden: 96
   num_encode_layers: 3
+  num_gnn_layers: 5
   num_conv_layers: 5
   num_mlp_layers: 1
   num_pred_layers: 3

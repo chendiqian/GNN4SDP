@@ -40,6 +40,7 @@ class PPGN(HigherOrder):
     def __init__(self,
                  hid_dim,
                  num_encode_layers,
+                 num_gnn_layers,
                  num_conv_layers,
                  num_pred_layers,
                  num_mlp_layers,
@@ -49,6 +50,7 @@ class PPGN(HigherOrder):
                  act):
         super().__init__(hid_dim,
                          num_encode_layers,
+                         num_gnn_layers,
                          num_conv_layers,
                          num_pred_layers,
                          num_mlp_layers,
