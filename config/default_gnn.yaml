@@ -6,4 +6,4 @@ gnn:
   num_mlp_layers: 1
   num_pred_layers: 3
   norm: graphnorm
-  act: gelu
+  act: relu
