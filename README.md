@@ -16,7 +16,4 @@ pip install "cvxpy[MOSEK]"
 ```
 
 A few tricks for training:  
-- If Edge GT training unstable, use ReLU.  
-- If Edge GT runs OOM, use batch gradient accumulation by setting a smaller batch size and `train.accum > 1`.  
-- If PPGN training unstable (especially dense instances), use `gnn.layernorm=True`. But it does not guarantee performance gain in all experiments.  
-- For synthetic dataset, 100 epoch is enough.  
+- If Edge GT runs OOM, use batch gradient accumulation by setting a smaller batch size and `train.accum > 1`.
