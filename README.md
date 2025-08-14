@@ -15,5 +15,21 @@ pip install "cvxpy[MOSEK]"
 # you may need a license for the MOSEK solver
 ```
 
-A few tricks for training:  
-- If Edge GT runs OOM, use batch gradient accumulation by setting a smaller batch size and `train.accum > 1`.
+## Replicate results in Table 1
+For Max Cut, Synthetic data, Max2SAT problems, we use 1 GNN encoder layer:  
+`python run.py --config-name ppgn train.datapath=DATAPATH gnn.num_gnn_layers=1`
+
+For Set Cover, Max Independent Set and Max3SAT problem, we use 2 GNN encoder layers:  
+`python run.py --config-name ppgn train.datapath=DATAPATH gnn.num_gnn_layers=2`
+
+Replace `ppgn` with `edge_gt/two_wl/ign/mpnn` for other baselines. 
+
+If Edge GT runs OOM, use batch gradient accumulation by setting a smaller batch size and `train.accum > 1`.
+
+## replicate runtime
+
+## test on a pretrained model
+`python test.py --config-name ppgn_test train.datapath=DATAPATH train.modelpath=MODELPATH`
+
+## Ablation on encoder
+Set `gnn.encode_type=multiset` or `gnn.encode_type=cat`
