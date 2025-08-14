@@ -17,6 +17,7 @@ def get_model(args):
     elif args.type == 'ign':
         model = IGN(hid_dim=args.hidden,
                     num_encode_layers=args.num_encode_layers,
+                    encode_type=args.encode_type,
                     num_gnn_layers=args.num_gnn_layers,
                     num_conv_layers=args.num_conv_layers,
                     num_pred_layers=args.num_pred_layers,
@@ -26,6 +27,7 @@ def get_model(args):
     elif args.type == 'ppgn':
         model = PPGN(hid_dim=args.hidden,
                      num_encode_layers=args.num_encode_layers,
+                     encode_type=args.encode_type,
                      num_gnn_layers=args.num_gnn_layers,
                      num_conv_layers=args.num_conv_layers,
                      num_pred_layers=args.num_pred_layers,
@@ -37,6 +39,7 @@ def get_model(args):
     elif args.type == '2wl':
         model = TwoWL(hid_dim=args.hidden,
                       num_encode_layers=args.num_encode_layers,
+                      encode_type=args.encode_type,
                       num_gnn_layers=args.num_gnn_layers,
                       num_conv_layers=args.num_conv_layers,
                       num_pred_layers=args.num_pred_layers,
@@ -48,6 +51,7 @@ def get_model(args):
         model = EdgeGT(
             hid_dim=args.hidden,
             num_encode_layers=args.num_encode_layers,
+            encode_type=args.encode_type,
             num_gnn_layers=args.num_gnn_layers,
             num_conv_layers=args.num_conv_layers,
             num_pred_layers=args.num_pred_layers,

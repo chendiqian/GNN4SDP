@@ -54,6 +54,7 @@ class EdgeGT(HigherOrder):
     def __init__(self,
                  hid_dim,
                  num_encode_layers,
+                 encode_type,
                  num_gnn_layers,
                  num_conv_layers,
                  num_pred_layers,
@@ -63,6 +64,7 @@ class EdgeGT(HigherOrder):
                  act):
         super().__init__(hid_dim,
                          num_encode_layers,
+                         encode_type,
                          num_gnn_layers,
                          num_conv_layers,
                          num_pred_layers,
