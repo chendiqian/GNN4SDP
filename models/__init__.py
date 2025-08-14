@@ -5,7 +5,7 @@ from .two_wl import TwoWL
 from .edge_gt import EdgeGT
 
 
-def get_model(args):
+def get_model(args, max_con_nodes=None, max_val_nodes=None):
     if args.type == 'mpnn':
         model = MPNN(hid_dim=args.hidden,
                      num_encode_layers=args.num_encode_layers,
@@ -35,7 +35,9 @@ def get_model(args):
                      block_mlp_layers=args.block_mlp_layers,
                      layernorm=args.layernorm,
                      norm=args.norm,
-                     act=args.act)
+                     act=args.act,
+                     max_con_nodes=max_con_nodes,
+                     max_val_nodes=max_val_nodes)
     elif args.type == '2wl':
         model = TwoWL(hid_dim=args.hidden,
                       num_encode_layers=args.num_encode_layers,

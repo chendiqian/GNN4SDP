@@ -3,7 +3,7 @@ from typing import Dict, Optional
 import torch
 from torch_geometric.nn import MLP, global_add_pool
 from torch_geometric.typing import EdgeType, NodeType
-from torch_geometric.utils import to_dense_batch
+from torch_geometric.utils import to_dense_batch, unbatch_edge_index
 
 from models.hetero_base_nn import SAGEConv
 from models.hetero_conv import HeteroConvLayer
@@ -35,8 +35,13 @@ class HigherOrder(torch.nn.Module):
                  num_pred_layers,
                  num_mlp_layers,
                  norm,
-                 act):
+                 act,
+                 max_con_nodes=None,
+                 max_val_nodes=None):
         super().__init__()
+
+        self.max_con_nodes = max_con_nodes
+        self.max_val_nodes = max_val_nodes
 
         self.cons_encoder = MLP([1] + [hid_dim] * num_encode_layers, act=act, norm=None)
         self.vals_encoder = MLP([1] + [hid_dim] * num_encode_layers, act=act, norm=None)
@@ -54,6 +59,10 @@ class HigherOrder(torch.nn.Module):
             # overwrite
             self.cons_encoder = MLP([2] + [hid_dim] * num_encode_layers, act=act, norm=None)
             # use param num_gnn_layers as number of encoder MLP
+            self.encoder = MLP([hid_dim * 2] + [hid_dim] * num_gnn_layers, act=act, norm=norm,
+                               plain_last=False)
+        elif encode_type == 'cat':
+            self.cons_encoder = MLP([2 * max_con_nodes] + [hid_dim] * num_encode_layers, act=act, norm=None)
             self.encoder = MLP([hid_dim * 2] + [hid_dim] * num_gnn_layers, act=act, norm=norm,
                                plain_last=False)
 
@@ -96,6 +105,22 @@ class HigherOrder(torch.nn.Module):
             vals_embedding = self.vals_encoder(vals_embedding)
 
             x = self.encoder(torch.cat([vals_embedding, cons], dim=1), batch_dict['vals'])
+        elif self.encode_type == 'cat':
+            vals_embedding = data.b.new_zeros(data['vals'].num_nodes, 1)
+            vals_embedding[edge_index_dict[('obj', 'to', 'vals')][1]] = edge_attr_dict[('obj', 'to', 'vals')]
+            vals_embedding = self.vals_encoder(vals_embedding)
+
+            dense_constraints = vals_embedding.new_zeros(data['vals'].num_nodes, self.max_con_nodes)
+            val_idx = edge_index_dict[('cons', 'to', 'vals')][1]
+            con_idx = torch.hstack(unbatch_edge_index(edge_index_dict[('cons', 'to', 'vals')][:1],
+                                                      data.batch_dict['cons']))[0]
+            dense_constraints[val_idx, con_idx] = edge_attr_dict[('cons', 'to', 'vals')].squeeze(1)
+            dense_b, _ = to_dense_batch(data.b, batch_dict['cons'], max_num_nodes=self.max_con_nodes)
+            nnodes_vals = torch.unique(batch_dict['vals'], return_counts=True)[1]
+            dense_b = dense_b.repeat_interleave(nnodes_vals, dim=0)
+            cons = torch.hstack([dense_b, dense_constraints])
+            cons_embedding = self.cons_encoder(cons)
+            x = self.encoder(torch.cat([vals_embedding, cons_embedding], dim=1), batch_dict['vals'])
         else:
             raise NotImplementedError
 
