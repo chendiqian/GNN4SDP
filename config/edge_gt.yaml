@@ -8,7 +8,6 @@ defaults:
 gnn:
   type: edge_gt
   num_head: 1
-  act: relu
 
 train:
   accum: 2

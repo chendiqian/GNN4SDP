@@ -6,6 +6,6 @@ defaults:
   # append _self_ to the end of the Defaults List.
 
 gnn:
-  type: 2wl
-  block_mlp_layers: 2
-  num_gnn_layers: 2
+  type: ppgn
+  block_mlp_layers: 1
+  layernorm: true
