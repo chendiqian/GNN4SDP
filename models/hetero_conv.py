@@ -18,8 +18,7 @@ class HeteroConv(torch.nn.Module):
             x_dict: Dict[NodeType, torch.FloatTensor],
             batch_dict: Dict[NodeType, torch.LongTensor],
             edge_index_dict: Dict[EdgeType, torch.LongTensor],
-            edge_attr_dict: Dict[EdgeType, torch.FloatTensor],
-            norm_dict: Dict[EdgeType, Optional[torch.FloatTensor]]
+            edge_attr_dict: Dict[EdgeType, torch.FloatTensor]
     ) -> Dict[NodeType, torch.FloatTensor]:
 
         new_dict = {}
@@ -32,8 +31,6 @@ class HeteroConv(torch.nn.Module):
                 args = args + [edge_index_dict[(src, 'to', dst)],
                                edge_attr_dict[(src, 'to', dst)],
                                batch_dict[dst]]
-                if norm_dict[(src, 'to', dst)] is not None:
-                    args.append(norm_dict[(src, 'to', dst)])
 
                 current_results.append(self.convs[conv](*args))
 

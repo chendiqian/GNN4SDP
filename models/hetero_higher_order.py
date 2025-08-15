@@ -79,7 +79,6 @@ class HigherOrder(torch.nn.Module):
         batch_dict['_vals'] = data.first_order_batch if hasattr(data, 'first_order_batch') else None
         edge_index_dict: Dict[EdgeType, torch.LongTensor] = data.edge_index_dict
         edge_attr_dict: Dict[EdgeType, torch.FloatTensor] = data.edge_attr_dict
-        norm_dict: Dict[EdgeType, Optional[torch.FloatTensor]] = data.norm_dict
 
         # reshape encoded SDP into batch of square features
         if need_padding(batch_dict['_vals']):
@@ -110,7 +109,7 @@ class HigherOrder(torch.nn.Module):
 
             x_dict: Dict[NodeType, torch.FloatTensor] = {'vals': vals_embedding, 'cons': cons_embedding}
             for i, layer in enumerate(self.gcns):
-                x_dict = layer(x_dict, batch_dict, edge_index_dict, edge_attr_dict, norm_dict)
+                x_dict = layer(x_dict, batch_dict, edge_index_dict, edge_attr_dict)
             x = x_dict['vals']
         elif self.encode_type == 'multiset':
             # cat (A_ij, b) first

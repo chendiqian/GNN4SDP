@@ -68,7 +68,6 @@ class MPNN(torch.nn.Module):
         batch_dict['_vals'] = data.first_order_batch if hasattr(data, 'first_order_batch') else None
         edge_index_dict: Dict[EdgeType, torch.LongTensor] = data.edge_index_dict
         edge_attr_dict: Dict[EdgeType, torch.FloatTensor] = data.edge_attr_dict
-        norm_dict: Dict[EdgeType, Optional[torch.FloatTensor]] = data.norm_dict
 
         cons_embedding = self.cons_encoder(data.b[:, None])
         vals_embedding = cons_embedding.new_zeros(data['vals'].num_nodes, 1)
@@ -76,14 +75,14 @@ class MPNN(torch.nn.Module):
         vals_embedding = self.vals_encoder(vals_embedding)
 
         x_dict: Dict[NodeType, torch.FloatTensor] = {'vals': vals_embedding, 'cons': cons_embedding}
-        return batch_dict, edge_index_dict, edge_attr_dict, norm_dict, x_dict
+        return batch_dict, edge_index_dict, edge_attr_dict, x_dict
 
     def forward(self, data):
-        batch_dict, edge_index_dict, edge_attr_dict, norm_dict, x_dict = self.init_embedding(data)
+        batch_dict, edge_index_dict, edge_attr_dict, x_dict = self.init_embedding(data)
 
         for i, layer in enumerate(self.gcns):
             # now we do message passing
-            x_dict = layer(x_dict, batch_dict, edge_index_dict, edge_attr_dict, norm_dict)
+            x_dict = layer(x_dict, batch_dict, edge_index_dict, edge_attr_dict)
 
         return self.predictor(x_dict['vals']).squeeze()
 
