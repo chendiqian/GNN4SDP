@@ -1,5 +1,7 @@
+import pdb
 from typing import Dict, Optional
 
+import numpy as np
 import torch
 from torch_geometric.nn import MLP, global_add_pool
 from torch_geometric.typing import EdgeType, NodeType
@@ -23,6 +25,25 @@ class SpatialLayerNorm(torch.nn.Module):
         std = x.std(dim=(1, 2), keepdim=True)
         x_norm = (x - mean) / (std + self.eps)
         return self.gamma * x_norm + self.beta
+
+
+def timestep_embedding(timesteps, dim, max_period=1000):
+    """
+    Create sinusoidal timestep embeddings.
+
+    :param timesteps: a 1-D Tensor of N indices, one per batch element.
+                      These may be fractional.
+    :param dim: the dimension of the output.
+    :param max_period: controls the minimum frequency of the embeddings.
+    :return: an [N x dim] Tensor of positional embeddings.
+    """
+    half = dim // 2
+    freqs = torch.exp(-np.log(max_period) * torch.arange(start=0, end=half, dtype=torch.float) / half).to(device=timesteps.device)
+    args = timesteps[:, None].float() * freqs[None]
+    embedding = torch.cat([torch.cos(args), torch.sin(args)], dim=-1)
+    if dim % 2:
+        embedding = torch.cat([embedding, torch.zeros_like(embedding[:, :1])], dim=-1)
+    return embedding
 
 
 class HigherOrder(torch.nn.Module):
@@ -62,7 +83,7 @@ class HigherOrder(torch.nn.Module):
             self.encoder = MLP([hid_dim * 2] + [hid_dim] * num_gnn_layers, act=act, norm=norm,
                                plain_last=False)
         elif encode_type == 'cat':
-            self.cons_encoder = MLP([2 * max_con_nodes] + [hid_dim] * num_encode_layers, act=act, norm=None)
+            self.cons_encoder = MLP([4] + [hid_dim] * num_encode_layers, act=act, norm=None)
             self.encoder = MLP([hid_dim * 2] + [hid_dim] * num_gnn_layers, act=act, norm=norm,
                                plain_last=False)
 
@@ -122,16 +143,16 @@ class HigherOrder(torch.nn.Module):
 
             x = self.encoder(torch.cat([vals_embedding, cons], dim=1), batch_dict['vals'])
         elif self.encode_type == 'cat':
-            dense_constraints = vals_embedding.new_zeros(data['vals'].num_nodes, self.max_con_nodes)
-            val_idx = edge_index_dict[('cons', 'to', 'vals')][1]
             con_idx = torch.hstack(unbatch_edge_index(edge_index_dict[('cons', 'to', 'vals')][:1],
                                                       batch_dict['cons']))[0]
-            dense_constraints[val_idx, con_idx] = edge_attr_dict[('cons', 'to', 'vals')].squeeze(1)
-            dense_b, _ = to_dense_batch(data.b, batch_dict['cons'], max_num_nodes=self.max_con_nodes)
-            nnodes_vals = torch.unique(batch_dict['vals'], return_counts=True)[1]
-            dense_b = dense_b.repeat_interleave(nnodes_vals, dim=0)
-            cons = torch.hstack([dense_b, dense_constraints])
+            pos_enc = timestep_embedding(con_idx, 2)
+
+            cons = torch.hstack([edge_attr_dict[('cons', 'to', 'vals')],
+                                 data.b[edge_index_dict[('cons', 'to', 'vals')][0], None],
+                                 pos_enc])
             cons_embedding = self.cons_encoder(cons)
+
+            cons_embedding = global_add_pool(cons_embedding, edge_index_dict[('cons', 'to', 'vals')][1], data['vals'].num_nodes)
             x = self.encoder(torch.cat([vals_embedding, cons_embedding], dim=1), batch_dict['vals'])
         else:
             raise NotImplementedError
