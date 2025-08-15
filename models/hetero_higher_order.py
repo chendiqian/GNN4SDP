@@ -51,6 +51,7 @@ class HigherOrder(torch.nn.Module):
                  hid_dim,
                  num_encode_layers,
                  encode_type,
+                 posenc,
                  num_gnn_layers,
                  num_conv_layers,
                  num_pred_layers,

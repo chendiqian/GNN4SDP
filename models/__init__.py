@@ -28,6 +28,7 @@ def get_model(args):
         model = PPGN(hid_dim=args.hidden,
                      num_encode_layers=args.num_encode_layers,
                      encode_type=args.encode_type,
+                     posenc=args.posenc,
                      num_gnn_layers=args.num_gnn_layers,
                      num_conv_layers=args.num_conv_layers,
                      num_pred_layers=args.num_pred_layers,
