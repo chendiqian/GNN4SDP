@@ -35,11 +35,6 @@ def main(args: DictConfig):
     valid_set = LPDataset(args.train.datapath, 'valid', transform=None)
     test_set = LPDataset(args.train.datapath, 'test', transform=None)
 
-    graphs = [g for g in train_set] + [g for g in valid_set] + [g for g in test_set]
-    max_val_nodes = max([g['vals'].num_nodes for g in graphs])
-    max_con_nodes = max([g['cons'].num_nodes for g in graphs])
-    del graphs
-
     if args.train.debug:
         train_set = train_set[:20]
         valid_set = valid_set[:20]
@@ -77,7 +72,7 @@ def main(args: DictConfig):
         torch.cuda.empty_cache()
         dist.barrier()
 
-        model = get_model(args.gnn, max_con_nodes, max_val_nodes).to(local_rank)
+        model = get_model(args.gnn).to(local_rank)
         model = DistributedDataParallel(model, device_ids=[local_rank])
         best_model = copy.deepcopy(model.state_dict())
 

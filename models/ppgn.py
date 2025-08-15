@@ -48,9 +48,7 @@ class PPGN(HigherOrder):
                  block_mlp_layers,
                  layernorm,
                  norm,
-                 act,
-                 max_con_nodes,
-                 max_val_nodes):
+                 act):
         super().__init__(hid_dim,
                          num_encode_layers,
                          encode_type,
@@ -59,9 +57,7 @@ class PPGN(HigherOrder):
                          num_pred_layers,
                          num_mlp_layers,
                          norm,
-                         act,
-                         max_con_nodes,
-                         max_val_nodes)
+                         act)
 
         self.higher_orders = torch.nn.ModuleList()
         for layer in range(num_conv_layers):

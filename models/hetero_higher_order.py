@@ -56,14 +56,8 @@ class HigherOrder(torch.nn.Module):
                  num_pred_layers,
                  num_mlp_layers,
                  norm,
-                 act,
-                 max_con_nodes=None,
-                 max_val_nodes=None):
+                 act):
         super().__init__()
-
-        self.max_con_nodes = max_con_nodes
-        self.max_val_nodes = max_val_nodes
-
         self.cons_encoder = MLP([1] + [hid_dim] * num_encode_layers, act=act, norm=None)
         self.vals_encoder = MLP([2] + [hid_dim] * num_encode_layers, act=act, norm=None)
 
