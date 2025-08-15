@@ -78,7 +78,8 @@ class HigherOrder(torch.nn.Module):
             self.encoder = MLP([hid_dim * 2] + [hid_dim] * num_gnn_layers, act=act, norm=norm,
                                plain_last=False)
         elif encode_type == 'cat':
-            self.cons_encoder = MLP([4] + [hid_dim] * num_encode_layers, act=act, norm=None)
+            self.posenc = posenc
+            self.cons_encoder = MLP([2 + posenc] + [hid_dim] * num_encode_layers, act=act, norm=None)
             self.encoder = MLP([hid_dim * 2] + [hid_dim] * num_gnn_layers, act=act, norm=norm,
                                plain_last=False)
 
@@ -140,7 +141,7 @@ class HigherOrder(torch.nn.Module):
         elif self.encode_type == 'cat':
             con_idx = torch.hstack(unbatch_edge_index(edge_index_dict[('cons', 'to', 'vals')][:1],
                                                       batch_dict['cons']))[0]
-            pos_enc = timestep_embedding(con_idx, 2)
+            pos_enc = timestep_embedding(con_idx, self.posenc)
 
             cons = torch.hstack([edge_attr_dict[('cons', 'to', 'vals')],
                                  data.b[edge_index_dict[('cons', 'to', 'vals')][0], None],
