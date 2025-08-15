@@ -44,7 +44,7 @@ class HigherOrder(torch.nn.Module):
         self.max_val_nodes = max_val_nodes
 
         self.cons_encoder = MLP([1] + [hid_dim] * num_encode_layers, act=act, norm=None)
-        self.vals_encoder = MLP([1] + [hid_dim] * num_encode_layers, act=act, norm=None)
+        self.vals_encoder = MLP([2] + [hid_dim] * num_encode_layers, act=act, norm=None)
 
         self.encode_type = encode_type
         if encode_type == 'gnn':
@@ -81,11 +81,32 @@ class HigherOrder(torch.nn.Module):
         edge_attr_dict: Dict[EdgeType, torch.FloatTensor] = data.edge_attr_dict
         norm_dict: Dict[EdgeType, Optional[torch.FloatTensor]] = data.norm_dict
 
+        # reshape encoded SDP into batch of square features
+        if need_padding(batch_dict['_vals']):
+            _, real_x_mask = to_dense_batch(data.b.new_empty(batch_dict['_vals'].shape[0]),
+                                            batch_dict['_vals'])  # B x Nmax x F
+            real_x_x_mask = torch.einsum('bn,bm->bnm', real_x_mask, real_x_mask)  # B x Nmax x Nmax
+            B = real_x_x_mask.shape[0]
+            N = real_x_x_mask.shape[1]
+        else:
+            real_x_x_mask = None
+            B = batch_dict['_vals'].max() + 1
+            N = batch_dict['_vals'].shape[0] // B
+
+        # encode the diagonal entries
+        diag_enc = torch.eye(N, dtype=torch.float, device=data.b.device)[None].repeat(B, 1, 1)
+        if real_x_x_mask is not None:
+            diag_enc = diag_enc[real_x_x_mask]
+        else:
+            diag_enc = diag_enc.reshape(-1, 1)
+
+        vals_embedding = data.b.new_zeros(data['vals'].num_nodes, 1)
+        vals_embedding[edge_index_dict[('obj', 'to', 'vals')][1]] = edge_attr_dict[('obj', 'to', 'vals')]
+        vals_embedding = torch.hstack([diag_enc, vals_embedding])
+        vals_embedding = self.vals_encoder(vals_embedding)
+
         if self.encode_type == 'gnn':
             cons_embedding = self.cons_encoder(data.b[:, None])
-            vals_embedding = cons_embedding.new_zeros(data['vals'].num_nodes, 1)
-            vals_embedding[edge_index_dict[('obj', 'to', 'vals')][1]] = edge_attr_dict[('obj', 'to', 'vals')]
-            vals_embedding = self.vals_encoder(vals_embedding)
 
             x_dict: Dict[NodeType, torch.FloatTensor] = {'vals': vals_embedding, 'cons': cons_embedding}
             for i, layer in enumerate(self.gcns):
@@ -100,20 +121,12 @@ class HigherOrder(torch.nn.Module):
             # aggregate to variable nodes
             cons = global_add_pool(cons, edge_index_dict[('cons', 'to', 'vals')][1], data['vals'].num_nodes)
 
-            vals_embedding = cons.new_zeros(data['vals'].num_nodes, 1)
-            vals_embedding[edge_index_dict[('obj', 'to', 'vals')][1]] = edge_attr_dict[('obj', 'to', 'vals')]
-            vals_embedding = self.vals_encoder(vals_embedding)
-
             x = self.encoder(torch.cat([vals_embedding, cons], dim=1), batch_dict['vals'])
         elif self.encode_type == 'cat':
-            vals_embedding = data.b.new_zeros(data['vals'].num_nodes, 1)
-            vals_embedding[edge_index_dict[('obj', 'to', 'vals')][1]] = edge_attr_dict[('obj', 'to', 'vals')]
-            vals_embedding = self.vals_encoder(vals_embedding)
-
             dense_constraints = vals_embedding.new_zeros(data['vals'].num_nodes, self.max_con_nodes)
             val_idx = edge_index_dict[('cons', 'to', 'vals')][1]
             con_idx = torch.hstack(unbatch_edge_index(edge_index_dict[('cons', 'to', 'vals')][:1],
-                                                      data.batch_dict['cons']))[0]
+                                                      batch_dict['cons']))[0]
             dense_constraints[val_idx, con_idx] = edge_attr_dict[('cons', 'to', 'vals')].squeeze(1)
             dense_b, _ = to_dense_batch(data.b, batch_dict['cons'], max_num_nodes=self.max_con_nodes)
             nnodes_vals = torch.unique(batch_dict['vals'], return_counts=True)[1]
@@ -124,27 +137,16 @@ class HigherOrder(torch.nn.Module):
         else:
             raise NotImplementedError
 
-        return batch_dict, x
-
-    def forward(self, data):
-        batch_dict, x = self.init_embedding(data)
-
-        feature_dim = x.shape[-1]
-        device = x.device
-
-        # reshape encoded SDP into batch of square features
-        if need_padding(batch_dict['_vals']):
-            _, real_x_mask = to_dense_batch(x.new_empty(batch_dict['_vals'].shape[0]),
-                                            batch_dict['_vals'])  # B x Nmax x F
-            real_x_x_mask = torch.einsum('bn,bm->bnm', real_x_mask, real_x_mask)  # B x Nmax x Nmax
-
-            x_x_dense = torch.zeros(*real_x_x_mask.shape + (feature_dim,), device=device, dtype=torch.float)
+        if real_x_x_mask is not None:
+            x_x_dense = torch.zeros(*real_x_x_mask.shape + (x.shape[-1],), device=x.device, dtype=torch.float)
             x_x_dense[real_x_x_mask] = x
         else:
-            real_x_x_mask = None
-            B = batch_dict['_vals'].max() + 1
-            N = batch_dict['_vals'].shape[0] // B
             x_x_dense = x.reshape(B, N, N, -1)
+
+        return x_x_dense, real_x_x_mask
+
+    def forward(self, data):
+        x_x_dense, real_x_x_mask = self.init_embedding(data)
 
         # higher order layers
         for i, layer in enumerate(self.higher_orders):
@@ -155,7 +157,7 @@ class HigherOrder(torch.nn.Module):
         if real_x_x_mask is not None:
             x_x_dense = x_x_dense[real_x_x_mask]
         else:
-            x_x_dense = x_x_dense.reshape(-1, feature_dim)
+            x_x_dense = x_x_dense.reshape(-1, x_x_dense.shape[-1])
         return self.predictor(x_x_dense).squeeze()
 
     def predict_single(self, data):
