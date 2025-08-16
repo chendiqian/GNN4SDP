@@ -1,4 +1,3 @@
-import pdb
 from typing import Dict, Optional
 
 import numpy as np
@@ -130,8 +129,8 @@ class HigherOrder(torch.nn.Module):
             x = x_dict['vals']
         elif self.encode_type == 'multiset':
             # cat (A_ij, b) first
-            b = data.b[edge_index_dict[('cons', 'to', 'vals')][0]].unsqueeze(1)
-            cons = torch.cat([edge_attr_dict[('cons', 'to', 'vals')], b], dim=1)
+            cons = torch.hstack([edge_attr_dict[('cons', 'to', 'vals')],
+                                 data.b[edge_index_dict[('cons', 'to', 'vals')][0], None]])
             # encode (A_ij, b) pairs
             cons = self.cons_encoder(cons)
             # aggregate to variable nodes
@@ -146,10 +145,10 @@ class HigherOrder(torch.nn.Module):
             cons = torch.hstack([edge_attr_dict[('cons', 'to', 'vals')],
                                  data.b[edge_index_dict[('cons', 'to', 'vals')][0], None],
                                  pos_enc])
-            cons_embedding = self.cons_encoder(cons)
+            cons = self.cons_encoder(cons)
 
-            cons_embedding = global_add_pool(cons_embedding, edge_index_dict[('cons', 'to', 'vals')][1], data['vals'].num_nodes)
-            x = self.encoder(torch.cat([vals_embedding, cons_embedding], dim=1), batch_dict['vals'])
+            cons = global_add_pool(cons, edge_index_dict[('cons', 'to', 'vals')][1], data['vals'].num_nodes)
+            x = self.encoder(torch.cat([vals_embedding, cons], dim=1), batch_dict['vals'])
         else:
             raise NotImplementedError
 
