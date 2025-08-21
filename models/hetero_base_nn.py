@@ -4,8 +4,10 @@ import torch
 from torch_geometric.nn import MessagePassing, MLP, Linear
 from torch_geometric.nn.resolver import activation_resolver
 from torch_geometric.typing import EdgeType, NodeType
+from torch_geometric.utils import to_dense_batch
 
 from models.hetero_conv import HeteroConvLayer
+from models.util import need_padding
 
 
 class SAGEConv(MessagePassing):
@@ -51,7 +53,7 @@ class MPNN(torch.nn.Module):
         super().__init__()
 
         self.cons_encoder = MLP([1] + [hid_dim] * num_encode_layers, act=act, norm=None)
-        self.vals_encoder = MLP([1] + [hid_dim] * num_encode_layers, act=act, norm=None)
+        self.vals_encoder = MLP([2] + [hid_dim] * num_encode_layers, act=act, norm=None)
 
         self.gcns = torch.nn.ModuleList()
         assert num_gnn_layers > 0
@@ -70,8 +72,28 @@ class MPNN(torch.nn.Module):
         edge_attr_dict: Dict[EdgeType, torch.FloatTensor] = data.edge_attr_dict
 
         cons_embedding = self.cons_encoder(data.b[:, None])
-        vals_embedding = cons_embedding.new_zeros(data['vals'].num_nodes, 1)
+
+        if need_padding(batch_dict['_vals']):
+            _, real_x_mask = to_dense_batch(data.b.new_empty(batch_dict['_vals'].shape[0]),
+                                            batch_dict['_vals'])  # B x Nmax x F
+            real_x_x_mask = torch.einsum('bn,bm->bnm', real_x_mask, real_x_mask)  # B x Nmax x Nmax
+            B = real_x_x_mask.shape[0]
+            N = real_x_x_mask.shape[1]
+        else:
+            real_x_x_mask = None
+            B = batch_dict['_vals'].max() + 1
+            N = batch_dict['_vals'].shape[0] // B
+
+        # encode the diagonal entries
+        diag_enc = torch.eye(N, dtype=torch.float, device=data.b.device)[None].repeat(B, 1, 1)
+        if real_x_x_mask is not None:
+            diag_enc = diag_enc[real_x_x_mask]
+        else:
+            diag_enc = diag_enc.reshape(-1, 1)
+
+        vals_embedding = data.b.new_zeros(data['vals'].num_nodes, 1)
         vals_embedding[edge_index_dict[('obj', 'to', 'vals')][1]] = edge_attr_dict[('obj', 'to', 'vals')]
+        vals_embedding = torch.hstack([diag_enc, vals_embedding])
         vals_embedding = self.vals_encoder(vals_embedding)
 
         x_dict: Dict[NodeType, torch.FloatTensor] = {'vals': vals_embedding, 'cons': cons_embedding}
