@@ -18,10 +18,10 @@ def get_model(args):
         model = IGN(hid_dim=args.hidden,
                     num_encode_layers=args.num_encode_layers,
                     encode_type=args.encode_type,
+                    posenc=args.posenc,
                     num_sdp_encoder_layers=args.num_sdp_encoder_layers,
                     num_conv_layers=args.num_conv_layers,
                     num_pred_layers=args.num_pred_layers,
-                    num_mlp_layers=args.num_mlp_layers,
                     norm=args.norm,
                     act=args.act)
     elif args.type == 'ppgn':
@@ -32,7 +32,6 @@ def get_model(args):
                      num_sdp_encoder_layers=args.num_sdp_encoder_layers,
                      num_conv_layers=args.num_conv_layers,
                      num_pred_layers=args.num_pred_layers,
-                     num_mlp_layers=args.num_mlp_layers,
                      block_mlp_layers=args.block_mlp_layers,
                      layernorm=args.layernorm,
                      norm=args.norm,
@@ -41,10 +40,10 @@ def get_model(args):
         model = TwoWL(hid_dim=args.hidden,
                       num_encode_layers=args.num_encode_layers,
                       encode_type=args.encode_type,
+                      posenc=args.posenc,
                       num_sdp_encoder_layers=args.num_sdp_encoder_layers,
                       num_conv_layers=args.num_conv_layers,
                       num_pred_layers=args.num_pred_layers,
-                      num_mlp_layers=args.num_mlp_layers,
                       block_mlp_layers=args.block_mlp_layers,
                       norm=args.norm,
                       act=args.act)
@@ -53,10 +52,10 @@ def get_model(args):
             hid_dim=args.hidden,
             num_encode_layers=args.num_encode_layers,
             encode_type=args.encode_type,
+            posenc=args.posenc,
             num_sdp_encoder_layers=args.num_sdp_encoder_layers,
             num_conv_layers=args.num_conv_layers,
             num_pred_layers=args.num_pred_layers,
-            num_mlp_layers=args.num_mlp_layers,
             num_head=args.num_head,
             norm=args.norm,
             act=args.act

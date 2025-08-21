@@ -54,7 +54,6 @@ class HigherOrder(torch.nn.Module):
                  num_sdp_encoder_layers,
                  num_conv_layers,
                  num_pred_layers,
-                 num_mlp_layers,
                  norm,
                  act):
         super().__init__()
@@ -67,8 +66,8 @@ class HigherOrder(torch.nn.Module):
             assert num_sdp_encoder_layers > 0
             for layer in range(num_sdp_encoder_layers):
                 self.gcns.append(HeteroConvLayer(
-                    v2c_conv=SAGEConv(hid_dim=hid_dim, num_mlp_layers=num_mlp_layers, act=act, norm=norm),
-                    c2v_conv=SAGEConv(hid_dim=hid_dim, num_mlp_layers=num_mlp_layers, act=act, norm=norm),
+                    v2c_conv=SAGEConv(hid_dim=hid_dim, num_mlp_layers=1, act=act, norm=norm),
+                    c2v_conv=SAGEConv(hid_dim=hid_dim, num_mlp_layers=1, act=act, norm=norm),
                 ))
         elif encode_type == 'multiset':
             # overwrite

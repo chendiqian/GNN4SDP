@@ -5,7 +5,6 @@ gnn:
   posenc: 8
   num_sdp_encoder_layers: 2  # this is to encode SDP tilde(A) as in the paper
   num_conv_layers: 5
-  num_mlp_layers: 1
   num_pred_layers: 3
   norm: graphnorm
   act: relu

@@ -45,7 +45,6 @@ class PPGN(HigherOrder):
                  num_sdp_encoder_layers,
                  num_conv_layers,
                  num_pred_layers,
-                 num_mlp_layers,
                  block_mlp_layers,
                  layernorm,
                  norm,
@@ -57,7 +56,6 @@ class PPGN(HigherOrder):
                          num_sdp_encoder_layers,
                          num_conv_layers,
                          num_pred_layers,
-                         num_mlp_layers,
                          norm,
                          act)
 
