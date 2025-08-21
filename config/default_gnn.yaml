@@ -1,9 +1,9 @@
 gnn:
   hidden: 96
-  num_encode_layers: 2
+  num_encode_layers: 2  # this is encoding V and C nodes
   encode_type: cat
-  posenc: 4
-  num_gnn_layers: 5
+  posenc: 8
+  num_sdp_encoder_layers: 2  # this is to encode SDP tilde(A) as in the paper
   num_conv_layers: 5
   num_mlp_layers: 1
   num_pred_layers: 3

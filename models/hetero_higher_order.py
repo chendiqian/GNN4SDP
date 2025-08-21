@@ -51,7 +51,7 @@ class HigherOrder(torch.nn.Module):
                  num_encode_layers,
                  encode_type,
                  posenc,
-                 num_gnn_layers,
+                 num_sdp_encoder_layers,
                  num_conv_layers,
                  num_pred_layers,
                  num_mlp_layers,
@@ -64,8 +64,8 @@ class HigherOrder(torch.nn.Module):
         self.encode_type = encode_type
         if encode_type == 'gnn':
             self.gcns = torch.nn.ModuleList()
-            assert num_gnn_layers > 0
-            for layer in range(num_gnn_layers):
+            assert num_sdp_encoder_layers > 0
+            for layer in range(num_sdp_encoder_layers):
                 self.gcns.append(HeteroConvLayer(
                     v2c_conv=SAGEConv(hid_dim=hid_dim, num_mlp_layers=num_mlp_layers, act=act, norm=norm),
                     c2v_conv=SAGEConv(hid_dim=hid_dim, num_mlp_layers=num_mlp_layers, act=act, norm=norm),
@@ -73,13 +73,12 @@ class HigherOrder(torch.nn.Module):
         elif encode_type == 'multiset':
             # overwrite
             self.cons_encoder = MLP([2] + [hid_dim] * num_encode_layers, act=act, norm=None)
-            # use param num_gnn_layers as number of encoder MLP
-            self.encoder = MLP([hid_dim * 2] + [hid_dim] * num_gnn_layers, act=act, norm=norm,
+            self.encoder = MLP([hid_dim * 2] + [hid_dim] * num_sdp_encoder_layers, act=act, norm=norm,
                                plain_last=False)
         elif encode_type == 'cat':
             self.posenc = posenc
             self.cons_encoder = MLP([2 + posenc] + [hid_dim] * num_encode_layers, act=act, norm=None)
-            self.encoder = MLP([hid_dim * 2] + [hid_dim] * num_gnn_layers, act=act, norm=norm,
+            self.encoder = MLP([hid_dim * 2] + [hid_dim] * num_sdp_encoder_layers, act=act, norm=norm,
                                plain_last=False)
 
         self.norms = torch.nn.ModuleList()

@@ -1,9 +1,15 @@
 defaults:
   - default_exp
-  - default_gnn
   - _self_
   # If you want your primary config to override the values of configs from the Defaults List,
   # append _self_ to the end of the Defaults List.
 
 gnn:
   type: mpnn
+  hidden: 96
+  num_encode_layers: 2
+  num_gnn_layers: 5
+  num_mlp_layers: 1
+  num_pred_layers: 3
+  norm: graphnorm
+  act: relu

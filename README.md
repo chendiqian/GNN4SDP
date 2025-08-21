@@ -16,11 +16,7 @@ pip install "cvxpy[MOSEK]"
 ```
 
 ## Replicate results in Table 1
-For Max Cut, Synthetic data, Max2SAT problems, we use 1 GNN encoder layer:  
-`python run.py --config-name ppgn train.datapath=DATAPATH gnn.num_gnn_layers=1`
-
-For Set Cover, Max Independent Set and Max3SAT problem, we use 2 GNN encoder layers:  
-`python run.py --config-name ppgn train.datapath=DATAPATH gnn.num_gnn_layers=2`
+`python run.py --config-name ppgn train.datapath=DATAPATH + your args`
 
 Replace `ppgn` with `edge_gt/two_wl/ign/mpnn` for other baselines. 
 
