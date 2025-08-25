@@ -46,7 +46,7 @@ def main(args: DictConfig):
         for data in tqdm(test_loader):
             data = data.to(device)
             t1 = sync_timer()
-            _ = model.predict_single(data)
+            _ = model(data)
             t2 = sync_timer()
             times.append(t2 - t1)
 

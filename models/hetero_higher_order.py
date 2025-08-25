@@ -172,6 +172,3 @@ class HigherOrder(torch.nn.Module):
         else:
             x_x_dense = x_x_dense.reshape(-1, x_x_dense.shape[-1])
         return self.predictor(x_x_dense).squeeze()
-
-    def predict_single(self, data):
-        raise NotImplementedError
