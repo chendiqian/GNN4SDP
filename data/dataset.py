@@ -18,7 +18,7 @@ class LPDataset(InMemoryDataset):
     ):
         super().__init__(root, transform, pre_transform, pre_filter)
         path = osp.join(self.processed_dir, f'{split}.pt')
-        self.data, self.slices = torch.load(path)
+        self.data, self.slices = torch.load(path, weights_only=False)
 
     @property
     def processed_dir(self) -> str:
@@ -32,7 +32,7 @@ class LPDataset(InMemoryDataset):
         num_instance_pkg = len([n for n in os.listdir(self.processed_dir) if n.startswith('batch')])
         data_list = []
         for i in range(num_instance_pkg):
-            data_list.extend(Batch.to_data_list(torch.load(osp.join(self.processed_dir, f'batch{i}.pt'))))
+            data_list.extend(Batch.to_data_list(torch.load(osp.join(self.processed_dir, f'batch{i}.pt'), weights_only=False)))
 
         lens = len(data_list)
         torch.save(self.collate(data_list[:int(0.8 * lens)]), osp.join(self.processed_dir, 'train.pt'))
