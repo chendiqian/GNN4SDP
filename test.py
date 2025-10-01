@@ -42,7 +42,7 @@ def main(args: DictConfig):
 
     for run, model_dict in enumerate(model_dicts):
         model = get_model(args.gnn).to(device)
-        state_dict = torch.load(os.path.join(args.train.modelpath, model_dict), map_location=device)
+        state_dict = torch.load(os.path.join(args.train.modelpath, model_dict), map_location=device, weights_only=False)
         model.load_state_dict(state_dict)
         trainer = PlainGNNTrainer(args.train.accum)
 
