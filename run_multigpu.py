@@ -29,7 +29,7 @@ def main(args: DictConfig):
     local_rank = int(os.environ["LOCAL_RANK"])
     assert world_size > 1, "This running file for multi gpu usage only!!!!"
 
-    dist.init_process_group(backend="nccl")
+    dist.init_process_group(backend="nccl", device_id=local_rank)
 
     train_set = LPDataset(args.train.datapath, 'train', transform=None)
     valid_set = LPDataset(args.train.datapath, 'valid', transform=None)
