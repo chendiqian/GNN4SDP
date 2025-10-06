@@ -44,6 +44,7 @@ class SAGEConv(MessagePassing):
 class MPNN(torch.nn.Module):
     def __init__(self,
                  hid_dim,
+                 diagonal_indicator,
                  num_encode_layers,
                  num_gnn_layers,
                  num_pred_layers,
@@ -53,8 +54,9 @@ class MPNN(torch.nn.Module):
         super().__init__()
 
         self.cons_encoder = MLP([1] + [hid_dim] * num_encode_layers, act=act, norm=None)
-        self.vals_encoder = MLP([2] + [hid_dim] * num_encode_layers, act=act, norm=None)
+        self.vals_encoder = MLP([2 if diagonal_indicator else 1] + [hid_dim] * num_encode_layers, act=act, norm=None)
 
+        self.diagonal = diagonal_indicator
         self.gcns = torch.nn.ModuleList()
         assert num_gnn_layers > 0
         for layer in range(num_gnn_layers):
@@ -84,16 +86,18 @@ class MPNN(torch.nn.Module):
             B = batch_dict['_vals'].max() + 1
             N = batch_dict['_vals'].shape[0] // B
 
-        # encode the diagonal entries
-        diag_enc = torch.eye(N, dtype=torch.float, device=data.b.device)[None].repeat(B, 1, 1)
-        if real_x_x_mask is not None:
-            diag_enc = diag_enc[real_x_x_mask]
-        else:
-            diag_enc = diag_enc.reshape(-1, 1)
-
         vals_embedding = data.b.new_zeros(data['vals'].num_nodes, 1)
         vals_embedding[edge_index_dict[('obj', 'to', 'vals')][1]] = edge_attr_dict[('obj', 'to', 'vals')]
-        vals_embedding = torch.hstack([diag_enc, vals_embedding])
+
+        if self.diagonal:
+            # encode the diagonal entries
+            diag_enc = torch.eye(N, dtype=torch.float, device=data.b.device)[None].repeat(B, 1, 1)
+            if real_x_x_mask is not None:
+                diag_enc = diag_enc[real_x_x_mask]
+            else:
+                diag_enc = diag_enc.reshape(-1, 1)
+            vals_embedding = torch.hstack([diag_enc, vals_embedding])
+
         vals_embedding = self.vals_encoder(vals_embedding)
 
         x_dict: Dict[NodeType, torch.FloatTensor] = {'vals': vals_embedding, 'cons': cons_embedding}

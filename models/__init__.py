@@ -8,6 +8,7 @@ from .edge_gt import EdgeGT
 def get_model(args):
     if args.type == 'mpnn':
         model = MPNN(hid_dim=args.hidden,
+                     diagonal_indicator=args.diagonal_indicator,
                      num_encode_layers=args.num_encode_layers,
                      num_gnn_layers=args.num_gnn_layers,
                      num_pred_layers=args.num_pred_layers,
@@ -18,6 +19,7 @@ def get_model(args):
         model = IGN(hid_dim=args.hidden,
                     num_encode_layers=args.num_encode_layers,
                     encode_type=args.encode_type,
+                    diagonal_indicator=args.diagonal_indicator,
                     posenc=args.posenc,
                     num_sdp_encoder_layers=args.num_sdp_encoder_layers,
                     num_conv_layers=args.num_conv_layers,
@@ -28,6 +30,7 @@ def get_model(args):
         model = PPGN(hid_dim=args.hidden,
                      num_encode_layers=args.num_encode_layers,
                      encode_type=args.encode_type,
+                     diagonal_indicator=args.diagonal_indicator,
                      posenc=args.posenc,
                      num_sdp_encoder_layers=args.num_sdp_encoder_layers,
                      num_conv_layers=args.num_conv_layers,
@@ -40,6 +43,7 @@ def get_model(args):
         model = TwoWL(hid_dim=args.hidden,
                       num_encode_layers=args.num_encode_layers,
                       encode_type=args.encode_type,
+                      diagonal_indicator=args.diagonal_indicator,
                       posenc=args.posenc,
                       num_sdp_encoder_layers=args.num_sdp_encoder_layers,
                       num_conv_layers=args.num_conv_layers,
@@ -48,18 +52,17 @@ def get_model(args):
                       norm=args.norm,
                       act=args.act)
     elif args.type == 'edge_gt':
-        model = EdgeGT(
-            hid_dim=args.hidden,
-            num_encode_layers=args.num_encode_layers,
-            encode_type=args.encode_type,
-            posenc=args.posenc,
-            num_sdp_encoder_layers=args.num_sdp_encoder_layers,
-            num_conv_layers=args.num_conv_layers,
-            num_pred_layers=args.num_pred_layers,
-            num_head=args.num_head,
-            norm=args.norm,
-            act=args.act
-        )
+        model = EdgeGT(hid_dim=args.hidden,
+                       num_encode_layers=args.num_encode_layers,
+                       encode_type=args.encode_type,
+                       diagonal_indicator=args.diagonal_indicator,
+                       posenc=args.posenc,
+                       num_sdp_encoder_layers=args.num_sdp_encoder_layers,
+                       num_conv_layers=args.num_conv_layers,
+                       num_pred_layers=args.num_pred_layers,
+                       num_head=args.num_head,
+                       norm=args.norm,
+                       act=args.act)
     else:
         raise NotImplementedError
 

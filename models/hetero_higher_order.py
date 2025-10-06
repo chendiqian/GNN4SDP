@@ -1,4 +1,4 @@
-from typing import Dict, Optional
+from typing import Dict
 
 import numpy as np
 import torch
@@ -50,6 +50,7 @@ class HigherOrder(torch.nn.Module):
                  hid_dim,
                  num_encode_layers,
                  encode_type,
+                 diagonal_indicator,
                  posenc,
                  num_sdp_encoder_layers,
                  num_conv_layers,
@@ -58,9 +59,10 @@ class HigherOrder(torch.nn.Module):
                  act):
         super().__init__()
         self.cons_encoder = MLP([1] + [hid_dim] * num_encode_layers, act=act, norm=None)
-        self.vals_encoder = MLP([2] + [hid_dim] * num_encode_layers, act=act, norm=None)
+        self.vals_encoder = MLP([2 if diagonal_indicator else 1] + [hid_dim] * num_encode_layers, act=act, norm=None)
 
         self.encode_type = encode_type
+        self.diagonal = diagonal_indicator
         if encode_type == 'gnn':
             self.gcns = torch.nn.ModuleList()
             assert num_sdp_encoder_layers > 0
@@ -72,12 +74,12 @@ class HigherOrder(torch.nn.Module):
         elif encode_type == 'multiset':
             # overwrite
             self.cons_encoder = MLP([2] + [hid_dim] * num_encode_layers, act=act, norm=None)
-            self.encoder = MLP([hid_dim * 2] + [hid_dim] * num_sdp_encoder_layers, act=act, norm=norm,
+            self.encoder = MLP([hid_dim] + [hid_dim] * num_sdp_encoder_layers, act=act, norm=norm,
                                plain_last=False)
         elif encode_type == 'cat':
             self.posenc = posenc
             self.cons_encoder = MLP([2 + posenc] + [hid_dim] * num_encode_layers, act=act, norm=None)
-            self.encoder = MLP([hid_dim * 2] + [hid_dim] * num_sdp_encoder_layers, act=act, norm=norm,
+            self.encoder = MLP([hid_dim] + [hid_dim] * num_sdp_encoder_layers, act=act, norm=norm,
                                plain_last=False)
 
         self.norms = torch.nn.ModuleList()
@@ -85,7 +87,6 @@ class HigherOrder(torch.nn.Module):
             self.norms.append(SpatialLayerNorm(hid_dim))
 
         # higher order NN is defined in separate instantiations!
-
         self.predictor = MLP([hid_dim] * num_pred_layers + [1], act=act, norm=None)
 
     def init_embedding(self, data):
@@ -106,16 +107,18 @@ class HigherOrder(torch.nn.Module):
             B = batch_dict['_vals'].max() + 1
             N = batch_dict['_vals'].shape[0] // B
 
-        # encode the diagonal entries
-        diag_enc = torch.eye(N, dtype=torch.float, device=data.b.device)[None].repeat(B, 1, 1)
-        if real_x_x_mask is not None:
-            diag_enc = diag_enc[real_x_x_mask]
-        else:
-            diag_enc = diag_enc.reshape(-1, 1)
-
         vals_embedding = data.b.new_zeros(data['vals'].num_nodes, 1)
         vals_embedding[edge_index_dict[('obj', 'to', 'vals')][1]] = edge_attr_dict[('obj', 'to', 'vals')]
-        vals_embedding = torch.hstack([diag_enc, vals_embedding])
+
+        if self.diagonal:
+            # encode the diagonal entries
+            diag_enc = torch.eye(N, dtype=torch.float, device=data.b.device)[None].repeat(B, 1, 1)
+            if real_x_x_mask is not None:
+                diag_enc = diag_enc[real_x_x_mask]
+            else:
+                diag_enc = diag_enc.reshape(-1, 1)
+            vals_embedding = torch.hstack([diag_enc, vals_embedding])
+
         vals_embedding = self.vals_encoder(vals_embedding)
 
         if self.encode_type == 'gnn':
@@ -134,10 +137,21 @@ class HigherOrder(torch.nn.Module):
             # aggregate to variable nodes
             cons = global_add_pool(cons, edge_index_dict[('cons', 'to', 'vals')][1], data['vals'].num_nodes)
 
-            x = self.encoder(torch.cat([vals_embedding, cons], dim=1), batch_dict['vals'])
+            x = self.encoder(vals_embedding + cons, batch_dict['vals'])
         elif self.encode_type == 'cat':
-            con_idx = torch.hstack(unbatch_edge_index(edge_index_dict[('cons', 'to', 'vals')][:1],
-                                                      batch_dict['cons']))[0]
+            if self.training:
+                # we randomly permute the index of constraints during training,
+                # so that it is insensitive to the canonical ordering
+                unbatched_edge_idx = unbatch_edge_index(edge_index_dict[('cons', 'to', 'vals')][:1], batch_dict['cons'])
+                con_idx = []
+                for idx in unbatched_edge_idx:
+                    idx = idx.squeeze(0)
+                    look_up = torch.randperm(idx.max() + 1).to(data.b.device)
+                    con_idx.append(look_up[idx])
+                con_idx = torch.cat(con_idx, dim=0)
+            else:
+                con_idx = torch.hstack(unbatch_edge_index(edge_index_dict[('cons', 'to', 'vals')][:1],
+                                                          batch_dict['cons']))[0]
             pos_enc = timestep_embedding(con_idx, self.posenc)
 
             cons = torch.hstack([edge_attr_dict[('cons', 'to', 'vals')],
@@ -146,7 +160,7 @@ class HigherOrder(torch.nn.Module):
             cons = self.cons_encoder(cons)
 
             cons = global_add_pool(cons, edge_index_dict[('cons', 'to', 'vals')][1], data['vals'].num_nodes)
-            x = self.encoder(torch.cat([vals_embedding, cons], dim=1), batch_dict['vals'])
+            x = self.encoder(vals_embedding + cons, batch_dict['vals'])
         else:
             raise NotImplementedError
 
