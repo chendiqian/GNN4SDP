@@ -2,9 +2,10 @@ gnn:
   hidden: 96
   num_encode_layers: 2  # this is encoding V and C nodes
   encode_type: cat
+  diagonal_indicator: false  # no diagonal indicator by default, only 2WL benefits from it
   posenc: 8
   num_sdp_encoder_layers: 2  # this is to encode SDP tilde(A) as in the paper
-  num_conv_layers: 5
+  num_conv_layers: 6
   num_pred_layers: 3
   norm: graphnorm
   act: relu
