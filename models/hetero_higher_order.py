@@ -58,12 +58,13 @@ class HigherOrder(torch.nn.Module):
                  norm,
                  act):
         super().__init__()
-        self.cons_encoder = MLP([1] + [hid_dim] * num_encode_layers, act=act, norm=None)
         self.vals_encoder = MLP([2 if diagonal_indicator else 1] + [hid_dim] * num_encode_layers, act=act, norm=None)
 
+        self.cons_encoder = None
         self.encode_type = encode_type
         self.diagonal = diagonal_indicator
         if encode_type == 'gnn':
+            self.cons_encoder = MLP([1] + [hid_dim] * num_encode_layers, act=act, norm=None)
             self.gcns = torch.nn.ModuleList()
             assert num_sdp_encoder_layers > 0
             for layer in range(num_sdp_encoder_layers):
@@ -146,7 +147,7 @@ class HigherOrder(torch.nn.Module):
                 con_idx = []
                 for idx in unbatched_edge_idx:
                     idx = idx.squeeze(0)
-                    look_up = torch.randperm(idx.max() + 1).to(data.b.device)
+                    look_up = torch.randperm(idx.max() + 1, dtype=torch.long, device=data.b.device)
                     con_idx.append(look_up[idx])
                 con_idx = torch.cat(con_idx, dim=0)
             else:
@@ -161,6 +162,10 @@ class HigherOrder(torch.nn.Module):
 
             cons = global_add_pool(cons, edge_index_dict[('cons', 'to', 'vals')][1], data['vals'].num_nodes)
             x = self.encoder(vals_embedding + cons, batch_dict['vals'])
+        elif self.encode_type is None:
+            # for some problems e.g. Max cut, we don't actually need it.
+            assert self.diagonal
+            x = vals_embedding
         else:
             raise NotImplementedError
 
