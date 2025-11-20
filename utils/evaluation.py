@@ -57,14 +57,18 @@ def solve_sdp_scs(C, A, b, warm_start=False, x=None, y=None, s=None):
     # zero cone: m equalities, spd cone: n times n
     cone = dict(z=m, s=n)
     # Setup workspace
-    solver = scs.SCS(data, cone)
+    solver = scs.SCS(data, cone, verbose=False)
     sol = solver.solve(warm_start, x, y, s)
     if sol['info']['status'] == 'solved':
         X = mat(sol["x"])
+        y = sol['y'][:m]
+        dual = mat(sol['y'][m:])
     else:
         X = None
+        y = None
+        dual = None
 
-    return X, sol, sol['info']['solve_time'] / 1000
+    return X, y, dual, sol, sol['info']['solve_time'] / 1000
 
 
 def recover_sdp_from_data(data, dtype=np.float32):
