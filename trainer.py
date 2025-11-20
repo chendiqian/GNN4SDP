@@ -37,11 +37,14 @@ class PlainGNNTrainer:
         optimizer.zero_grad()
         for i, data in enumerate(dataloader):
             data = data.to(device)
-            label = data.x_solution
 
-            pred = model(data)
-            loss = scatter((pred - label) ** 2, data.batch_dict['vals'], dim=0, reduce='mean')
-            loss = loss.mean()
+            pred_primal, pred_slack, pred_dual = model(data)
+            loss = scatter((pred_primal - data.x_solution) ** 2, data.batch_dict['vals'], dim=0, reduce='mean').mean()
+            if pred_slack is not None:
+                loss = loss + scatter((pred_slack - data.dual_solution) ** 2, data.batch_dict['vals'], dim=0, reduce='mean').mean()
+            if pred_dual is not None:
+                loss = loss + scatter((pred_dual - data.y_solution) ** 2, data.batch_dict['cons'], dim=0, reduce='mean').mean()
+
             train_losses += loss.detach() * data.num_graphs
             num_graphs += data.num_graphs
 
@@ -64,13 +67,19 @@ class PlainGNNTrainer:
         projected_objgaps = []
         for i, data in enumerate(dataloader):
             data = data.to(device)
-            pred = model(data)
-            loss = scatter((pred - data.x_solution) ** 2, data.batch_dict['vals'], dim=0, reduce='mean')
+
+            pred_primal, pred_slack, pred_dual = model(data)
+            loss = scatter((pred_primal - data.x_solution) ** 2, data.batch_dict['vals'], dim=0, reduce='mean').mean()
+            if pred_slack is not None:
+                loss = loss + scatter((pred_slack - data.dual_solution) ** 2, data.batch_dict['vals'], dim=0, reduce='mean').mean()
+            if pred_dual is not None:
+                loss = loss + scatter((pred_dual - data.y_solution) ** 2, data.batch_dict['cons'], dim=0, reduce='mean').mean()
+
             val_losses += loss.sum()
             num_graphs += data.num_graphs
 
             # quick evaluation
-            obj_pred = scatter(pred[data['obj', 'to', 'vals'].edge_index[1]] *
+            obj_pred = scatter(pred_primal[data['obj', 'to', 'vals'].edge_index[1]] *
                                data['obj', 'to', 'vals'].edge_attr.squeeze(1),
                                data['obj', 'to', 'vals'].edge_index[0], dim=0, reduce='sum')
             obj_gt = data.obj_solution
@@ -79,7 +88,7 @@ class PlainGNNTrainer:
 
             # project onto PSD cone
             if project:
-                preds = unbatch(pred, data.batch_dict['vals'], 0, data.num_graphs)
+                preds = unbatch(pred_primal, data.batch_dict['vals'], 0, data.num_graphs)
                 edges, coeffs = unbatch_edge_index(data['obj', 'to', 'vals'].edge_index,
                                                    data['obj', 'to', 'vals'].edge_attr.squeeze(1),
                                                    data.batch_dict['obj'],
