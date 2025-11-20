@@ -3,13 +3,13 @@
 ## Environment setup
 
 ```angular2html
-conda create -y -n ipmgnn python=3.11
+conda create -y -n gnnsdp python=3.11
 conda activate gnnsdp
-conda install -y pytorch==2.3.1 pytorch-cuda=12.1 -c pytorch -c nvidia
-pip install torch_geometric==2.5.3  # maybe latest also works
-pip install https://data.pyg.org/whl/torch-2.3.0%2Bcu121/torch_scatter-2.1.2%2Bpt23cu121-cp311-cp311-linux_x86_64.whl
-pip install https://data.pyg.org/whl/torch-2.3.0%2Bcu121/torch_sparse-0.6.18%2Bpt23cu121-cp311-cp311-linux_x86_64.whl
-pip install https://data.pyg.org/whl/torch-2.3.0%2Bcu121/torch_cluster-1.6.3%2Bpt23cu121-cp311-cp311-linux_x86_64.whl
+
+pip3 install torch==2.8.0 --index-url https://download.pytorch.org/whl/cu126
+pip install torch_geometric
+pip install torch_scatter torch_sparse -f https://data.pyg.org/whl/torch-2.8.0+cu126.html
+
 pip install wandb hydra-core loguru
 pip install "cvxpy[MOSEK]"
 # you may need a license for the MOSEK solver
