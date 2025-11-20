@@ -12,7 +12,7 @@ class PPGNBlock(torch.nn.Module):
 
         self.mlp1 = MLP([in_features] + [out_features] * mlp_layers, act=act, norm=None, plain_last=False)
         self.mlp2 = MLP([in_features] + [out_features] * mlp_layers, act=act, norm=None, plain_last=False)
-        self.skip = MLP([out_features, out_features], act=act, norm=None, plain_last=False)
+        self.skip = MLP([out_features] * (mlp_layers + 1), act=act, norm=None, plain_last=False)
         if layernorm:
             self.ln = torch.nn.LayerNorm(out_features)
         else:
@@ -38,29 +38,33 @@ class PPGNBlock(torch.nn.Module):
 
 class PPGN(HigherOrder):
     def __init__(self,
+                 no_mp,
+                 no_wl,
+                 no_dual,
                  hid_dim,
                  num_encode_layers,
-                 encode_type,
-                 diagonal_indicator,
-                 posenc,
-                 num_sdp_encoder_layers,
                  num_conv_layers,
+                 gnn_mlp_layers,
                  num_pred_layers,
                  block_mlp_layers,
                  layernorm,
                  norm,
                  act):
-        super().__init__(hid_dim,
+        super().__init__(no_mp,
+                         no_wl,
+                         no_dual,
+                         hid_dim,
                          num_encode_layers,
-                         encode_type,
-                         diagonal_indicator,
-                         posenc,
-                         num_sdp_encoder_layers,
                          num_conv_layers,
+                         gnn_mlp_layers,
                          num_pred_layers,
                          norm,
                          act)
 
+        if not no_wl:
+            self.init_higher_order_layers(num_conv_layers, hid_dim, block_mlp_layers, layernorm, act)
+
+    def init_higher_order_layers(self, num_conv_layers, hid_dim, block_mlp_layers, layernorm, act):
         self.higher_orders = torch.nn.ModuleList()
         for layer in range(num_conv_layers):
             self.higher_orders.append(PPGNBlock(hid_dim, hid_dim, block_mlp_layers, layernorm, act))

@@ -9,6 +9,8 @@ gnn:
   type: ppgn
   block_mlp_layers: 1
   layernorm: true
+  no_mp: true  # we don't need mp for maxcut, which speed up
+  no_dual: true  # we don't predict the dual variables
 
 train:
   device: cpu

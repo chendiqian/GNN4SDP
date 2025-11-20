@@ -7,4 +7,4 @@ defaults:
 
 gnn:
   type: 2wl
-  block_mlp_layers: 2
+  block_mlp_layers: 1

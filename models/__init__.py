@@ -1,64 +1,68 @@
 from .ppgn import PPGN
 from .ign import IGN
-from .hetero_base_nn import MPNN
 from .two_wl import TwoWL
 from .edge_gt import EdgeGT
+from .hetero_higher_order import HigherOrder
 
 
 def get_model(args):
     if args.type == 'mpnn':
-        model = MPNN(hid_dim=args.hidden,
-                     diagonal_indicator=args.diagonal_indicator,
-                     num_encode_layers=args.num_encode_layers,
-                     num_gnn_layers=args.num_gnn_layers,
-                     num_pred_layers=args.num_pred_layers,
-                     num_mlp_layers=args.num_mlp_layers,
-                     norm=args.norm,
-                     act=args.act)
+        model = HigherOrder(
+            no_mp=False,
+            no_wl=True,
+            no_dual=args.no_dual,
+            hid_dim=args.hidden,
+            num_encode_layers=args.num_encode_layers,
+            num_conv_layers=args.num_conv_layers,
+            gnn_mlp_layers=args.gnn_mlp_layers,
+            num_pred_layers=args.num_pred_layers,
+            norm=args.norm,
+            act=args.act
+        )
     elif args.type == 'ign':
-        model = IGN(hid_dim=args.hidden,
+        model = IGN(no_mp=args.no_mp,
+                    no_wl=False,
+                    no_dual=args.no_dual,
+                    hid_dim=args.hidden,
                     num_encode_layers=args.num_encode_layers,
-                    encode_type=args.encode_type,
-                    diagonal_indicator=args.diagonal_indicator,
-                    posenc=args.posenc,
-                    num_sdp_encoder_layers=args.num_sdp_encoder_layers,
                     num_conv_layers=args.num_conv_layers,
+                    gnn_mlp_layers=args.gnn_mlp_layers,
                     num_pred_layers=args.num_pred_layers,
                     norm=args.norm,
                     act=args.act)
     elif args.type == 'ppgn':
-        model = PPGN(hid_dim=args.hidden,
+        model = PPGN(no_mp=args.no_mp,
+                     no_wl=False,
+                     no_dual=args.no_dual,
+                     hid_dim=args.hidden,
                      num_encode_layers=args.num_encode_layers,
-                     encode_type=args.encode_type,
-                     diagonal_indicator=args.diagonal_indicator,
-                     posenc=args.posenc,
-                     num_sdp_encoder_layers=args.num_sdp_encoder_layers,
                      num_conv_layers=args.num_conv_layers,
+                     gnn_mlp_layers=args.gnn_mlp_layers,
                      num_pred_layers=args.num_pred_layers,
                      block_mlp_layers=args.block_mlp_layers,
                      layernorm=args.layernorm,
                      norm=args.norm,
                      act=args.act)
     elif args.type == '2wl':
-        model = TwoWL(hid_dim=args.hidden,
+        model = TwoWL(no_mp=args.no_mp,
+                      no_wl=False,
+                      no_dual=args.no_dual,
+                      hid_dim=args.hidden,
                       num_encode_layers=args.num_encode_layers,
-                      encode_type=args.encode_type,
-                      diagonal_indicator=args.diagonal_indicator,
-                      posenc=args.posenc,
-                      num_sdp_encoder_layers=args.num_sdp_encoder_layers,
                       num_conv_layers=args.num_conv_layers,
+                      gnn_mlp_layers=args.gnn_mlp_layers,
                       num_pred_layers=args.num_pred_layers,
                       block_mlp_layers=args.block_mlp_layers,
                       norm=args.norm,
                       act=args.act)
     elif args.type == 'edge_gt':
-        model = EdgeGT(hid_dim=args.hidden,
+        model = EdgeGT(no_mp=args.no_mp,
+                       no_wl=False,
+                       no_dual=args.no_dual,
+                       hid_dim=args.hidden,
                        num_encode_layers=args.num_encode_layers,
-                       encode_type=args.encode_type,
-                       diagonal_indicator=args.diagonal_indicator,
-                       posenc=args.posenc,
-                       num_sdp_encoder_layers=args.num_sdp_encoder_layers,
                        num_conv_layers=args.num_conv_layers,
+                       gnn_mlp_layers=args.gnn_mlp_layers,
                        num_pred_layers=args.num_pred_layers,
                        num_head=args.num_head,
                        norm=args.norm,

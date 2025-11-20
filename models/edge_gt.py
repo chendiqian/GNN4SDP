@@ -52,28 +52,32 @@ class FastEdgeAttention(torch.nn.Module):
 
 class EdgeGT(HigherOrder):
     def __init__(self,
+                 no_mp,
+                 no_wl,
+                 no_dual,
                  hid_dim,
                  num_encode_layers,
-                 encode_type,
-                 diagonal_indicator,
-                 posenc,
-                 num_sdp_encoder_layers,
                  num_conv_layers,
+                 gnn_mlp_layers,
                  num_pred_layers,
                  num_head,
                  norm,
                  act):
-        super().__init__(hid_dim,
+        super().__init__(no_mp,
+                         no_wl,
+                         no_dual,
+                         hid_dim,
                          num_encode_layers,
-                         encode_type,
-                         diagonal_indicator,
-                         posenc,
-                         num_sdp_encoder_layers,
                          num_conv_layers,
+                         gnn_mlp_layers,
                          num_pred_layers,
                          norm,
                          act)
 
+        if not no_wl:
+            self.init_higher_order_layers(num_conv_layers, hid_dim, num_head)
+
+    def init_higher_order_layers(self, num_conv_layers, hid_dim, num_head):
         self.higher_orders = torch.nn.ModuleList()
         for layer in range(num_conv_layers):
             self.higher_orders.append(FastEdgeAttention(hid_dim, num_head))
