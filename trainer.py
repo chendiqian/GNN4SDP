@@ -69,11 +69,11 @@ class PlainGNNTrainer:
             data = data.to(device)
 
             pred_primal, pred_slack, pred_dual = model(data)
-            loss = scatter((pred_primal - data.x_solution) ** 2, data.batch_dict['vals'], dim=0, reduce='mean').mean()
+            loss = scatter((pred_primal - data.x_solution) ** 2, data.batch_dict['vals'], dim=0, reduce='mean')
             if pred_slack is not None:
-                loss = loss + scatter((pred_slack - data.dual_solution) ** 2, data.batch_dict['vals'], dim=0, reduce='mean').mean()
+                loss = loss + scatter((pred_slack - data.dual_solution) ** 2, data.batch_dict['vals'], dim=0, reduce='mean')
             if pred_dual is not None:
-                loss = loss + scatter((pred_dual - data.y_solution) ** 2, data.batch_dict['cons'], dim=0, reduce='mean').mean()
+                loss = loss + scatter((pred_dual - data.y_solution) ** 2, data.batch_dict['cons'], dim=0, reduce='mean')
 
             val_losses += loss.sum()
             num_graphs += data.num_graphs
