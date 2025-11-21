@@ -130,6 +130,7 @@ class HigherOrder(torch.nn.Module):
         self.predictor2 = None
         self.predictor3 = None
         if not no_dual:
+            assert not no_mp, "Require message passing to predict slack variable!"
             self.predictor2 = MLP([hid_dim] * num_pred_layers + [1], act=act, norm=None)
             self.predictor3 = MLP([hid_dim] * num_pred_layers + [1], act=act, norm=None)
 
