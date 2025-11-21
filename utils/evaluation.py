@@ -33,7 +33,7 @@ def mat(s):
     return S
 
 
-def solve_sdp_scs(C, A, b, warm_start=False, x=None, y=None, s=None):
+def solve_sdp_scs(C, A, b, verbose=False, gpu=False, warm_start=False, x=None, y=None, s=None):
     m = A.shape[-1]
     n = C.shape[0]
     nvec = (n + 1) * n // 2
@@ -57,7 +57,7 @@ def solve_sdp_scs(C, A, b, warm_start=False, x=None, y=None, s=None):
     # zero cone: m equalities, spd cone: n times n
     cone = dict(z=m, s=n)
     # Setup workspace
-    solver = scs.SCS(data, cone, verbose=False)
+    solver = scs.SCS(data, cone, verbose=verbose, gpu=gpu)
     sol = solver.solve(warm_start, x, y, s)
     if sol['info']['status'] == 'solved':
         X = mat(sol["x"])
@@ -68,7 +68,7 @@ def solve_sdp_scs(C, A, b, warm_start=False, x=None, y=None, s=None):
         y = None
         dual = None
 
-    return X, y, dual, sol, sol['info']['solve_time'] / 1000
+    return X, y, dual, sol
 
 
 def recover_sdp_from_data(data, dtype=np.float32):
