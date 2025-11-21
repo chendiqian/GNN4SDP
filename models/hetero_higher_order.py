@@ -180,8 +180,12 @@ class HigherOrder(torch.nn.Module):
 
     def forward(self, data):
         batch_dict, edge_index_dict, edge_attr_dict, x_dict, real_x_x_mask = self.init_embedding(data)
-        B = batch_dict['_vals'].max() + 1
-        N = batch_dict['_vals'].shape[0] // B
+        if real_x_x_mask is not None:
+            B = real_x_x_mask.shape[0]
+            N = real_x_x_mask.shape[1]
+        else:
+            B = batch_dict['_vals'].max() + 1
+            N = batch_dict['_vals'].shape[0] // B
 
         # init vals is flat!
         cons, vals = x_dict['cons'], x_dict['vals']
