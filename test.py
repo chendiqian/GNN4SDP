@@ -17,7 +17,7 @@ from utils.experiment import save_run_config, setup_wandb
 torch.set_float32_matmul_precision('high')
 
 
-@hydra.main(version_base=None, config_path='./config', config_name="ppgn_test")
+@hydra.main(version_base=None, config_path='./config', config_name="ppgn")
 def main(args: DictConfig):
     setup_wandb(args)
 
