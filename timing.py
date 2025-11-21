@@ -15,7 +15,7 @@ from utils.experiment import setup_wandb, sync_timer
 torch.set_float32_matmul_precision('high')
 
 
-@hydra.main(version_base=None, config_path='./config', config_name="ppgn_time")
+@hydra.main(version_base=None, config_path='./config', config_name="ppgn")
 def main(args: DictConfig):
     setup_wandb(args)
 
@@ -30,9 +30,7 @@ def main(args: DictConfig):
                              collate_fn=collate_fn_lp_base,
                              pin_memory=True)
 
-    device = args.train.device
-    assert device in ['cuda', 'cpu']
-    if device == 'cuda' and torch.cuda.is_available():
+    if torch.cuda.is_available():
         device = 'cuda'
     else:
         warnings.warn("No cuda available")
