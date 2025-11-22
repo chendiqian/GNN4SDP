@@ -59,7 +59,7 @@ def solve_sdp_scs(C, A, b, verbose=False, gpu=False, warm_start=False, x=None, y
     # Setup workspace
     solver = scs.SCS(data, cone, verbose=verbose, gpu=gpu)
     sol = solver.solve(warm_start, x, y, s)
-    if sol['info']['status'] == 'solved':
+    if sol['info']['status'].startswith('solved'):  # allowed to be inaccurate
         X = mat(sol["x"])
         y = sol['y'][:m]
         dual = mat(sol['y'][m:])
