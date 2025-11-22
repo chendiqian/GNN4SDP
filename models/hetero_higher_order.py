@@ -168,8 +168,8 @@ class HigherOrder(torch.nn.Module):
         vals_embedding[edge_index_dict[('obj', 'to', 'vals')][1]] = edge_attr_dict[('obj', 'to', 'vals')]
         # encode the diagonal entries
         diag_enc = torch.eye(N, dtype=torch.float, device=data.b.device)[None].repeat(B, 1, 1)
-        if real_x_x_mask:
-            diag_enc = diag_enc[real_x_x_mask]
+        if real_x_x_mask is not None:
+            diag_enc = diag_enc[real_x_x_mask][..., None]
         else:
             diag_enc = diag_enc.reshape(-1, 1)
         vals_embedding = torch.hstack([diag_enc, vals_embedding])
