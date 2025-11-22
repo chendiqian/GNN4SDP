@@ -1,5 +1,6 @@
 import copy
 import os
+from collections import defaultdict
 
 import hydra
 import numpy as np
@@ -27,7 +28,7 @@ def main(args: DictConfig):
     train_set = LPDataset(args.train.datapath, 'train', transform=None)
 
     if args.train.debug:
-        train_set = train_set[:2]
+        train_set = train_set[-2:]
 
     train_loader = DataLoader(train_set,
                               batch_size=args.train.batchsize,
@@ -36,9 +37,7 @@ def main(args: DictConfig):
                               pin_memory=True)
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    test_losses = []
-    test_objgaps = []
-    psd_obj_gaps = []
+    result_dict = defaultdict(list)
 
     for run in range(args.train.runs):
         model = get_model(args.gnn).to(device)
@@ -83,21 +82,24 @@ def main(args: DictConfig):
             wandb.log(stats_dict)
 
         model.load_state_dict(best_model)
-        test_loss, test_obj_gap, psd_obj_gap = trainer.eval(train_loader, model, device, True)
 
-        test_losses.append(test_loss.item())
-        test_objgaps.append(test_obj_gap.item())
-        psd_obj_gaps.append(psd_obj_gap.item())
+        for graph in train_set:
+            test_loader = DataLoader([graph],
+                                     batch_size=1,
+                                     shuffle=False,
+                                     collate_fn=collate_fn_lp_base)
+            name = graph.name
+            test_loss, test_obj_gap, psd_obj_gap = trainer.eval(test_loader, model, device, True)
+            result_dict[f'{name}_loss'].append(test_loss.item())
+            result_dict[f'{name}_objgap'].append(test_obj_gap.item())
+            result_dict[f'{name}_psdobjgap'].append(psd_obj_gap.item())
 
-    wandb.log({
-        'num_params': count_parameters(model),
-        'test_loss_mean': np.mean(test_losses),
-        'test_loss_std': np.std(test_losses),
-        'test_obj_gap_mean': np.mean(test_objgaps),
-        'test_obj_gap_std': np.std(test_objgaps),
-        'test_psd_obj_gap_mean': np.mean(psd_obj_gaps),
-        'test_psd_obj_gap_std': np.std(psd_obj_gaps),
-    })
+    result_stats = {'num_params': count_parameters(model)}
+    for k, v in result_dict.items():
+        result_stats[k + '_mean'] = np.mean(v).item()
+        result_stats[k + '_std'] = np.std(v).item()
+
+    wandb.log(result_stats)
 
 
 if __name__ == '__main__':
