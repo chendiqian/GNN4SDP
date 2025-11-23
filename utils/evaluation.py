@@ -58,7 +58,7 @@ def solve_sdp_scs(C, A, b, regularization=0., verbose=False, gpu=False, warm_sta
         row_lengths = np.arange(n, 1, -1)
         diag_indices = np.concatenate(([0], np.cumsum(row_lengths)))
         vals[diag_indices] = 0.5
-        P = sparse.diags_array(vals, format='csc')
+        P = sparse.diags(vals, format='csc')
         data = dict(P=P * regularization, A=A_sp, b=b, c=c)
     else:
         data = dict(A=A_sp, b=b, c=c)
