@@ -24,6 +24,9 @@ def main(args: DictConfig):
 
     test_set = LPDataset(args.train.datapath, 'train', transform=None)
 
+    if args.train.debug:
+        test_set = test_set[-2:]
+
     use_gpu = torch.cuda.is_available()
     device = 'cuda' if use_gpu else 'cpu'
     wandb.log({'device': device})
@@ -46,7 +49,7 @@ def main(args: DictConfig):
         _ = model(batch)
 
     result_dict = defaultdict(list)
-    repeats = 5
+    repeats = 3
 
     pbar = tqdm(test_set)
     for data in pbar:
@@ -55,10 +58,13 @@ def main(args: DictConfig):
         n = C.shape[0]
         m = A.shape[-1]
         times = []
-        for _ in range(repeats):
+        for r in range(repeats):
             *_, sol = solve_sdp_scs(C, A, b, False, use_gpu)
             times.append(sol['info']['solve_time'])
-        result_dict[f'{name}_solver_time'].append(np.mean(times) / 1000.)
+            logger.info(f"repeat {r}: solver time: {sol['info']['solve_time']}")
+        times = np.array(times) / 1000.
+        result_dict[f'{name}_solver_time_mean'].append(np.mean(times))
+        result_dict[f'{name}_solver_time_std'].append(np.std(times))
 
         batch = collate_fn_lp_base([data]).to(device)
 
@@ -74,24 +80,24 @@ def main(args: DictConfig):
                 pred_primal, pred_slack, pred_dual = model(batch)
                 t2 = sync_timer()
 
+            logger.info(f"GNN time: {t2 - t1}")
             gnn_times.append(t2 - t1)
             x = map_vec(pred_primal.detach().cpu().numpy().reshape(n, n, 1)).squeeze()
             s = np.hstack([np.zeros(m), x])
             y = np.hstack([pred_dual.detach().cpu().numpy(),
                            map_vec(pred_slack.detach().cpu().numpy().reshape(n, n, 1)).squeeze()])
             *_, sol = solve_sdp_scs(C, A, b, False, use_gpu, True, x=x, y=y, s=s)
+            logger.info(f"warm start time: {sol['info']['solve_time']}")
             warm_times.append(sol['info']['solve_time'])
-        result_dict[f'{name}_model_time'].append(np.mean(gnn_times))
-        result_dict[f'{name}_warmstart_time'].append(np.mean(warm_times) / 1000.)
 
-        pbar.set_postfix({'vanilla': result_dict[f'{name}_solver_time'][-1], "warmed up": result_dict[f'{name}_warmstart_time'][-1]})
+        warm_times = np.array(warm_times) / 1000
+        gnn_times = np.array(gnn_times)
+        result_dict[f'{name}_model_time_mean'].append(np.mean(gnn_times))
+        result_dict[f'{name}_model_time_std'].append(np.std(gnn_times))
+        result_dict[f'{name}_warmstart_time_mean'].append(np.mean(warm_times))
+        result_dict[f'{name}_warmstart_time_std'].append(np.std(warm_times))
 
-    result_stats = dict()
-    for k, v in result_dict.items():
-        result_stats[k + '_mean'] = np.mean(v).item()
-        result_stats[k + '_std'] = np.std(v).item()
-
-    wandb.log(result_stats)
+    wandb.log(result_dict)
 
 
 if __name__ == '__main__':
