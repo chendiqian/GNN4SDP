@@ -6,8 +6,6 @@ import wandb
 from loguru import logger
 from omegaconf import DictConfig
 from tqdm import tqdm
-from collections import defaultdict
-
 
 from data.collate_func import collate_fn_lp_base
 from data.dataset import LPDataset
@@ -48,7 +46,6 @@ def main(args: DictConfig):
     for _ in range(20):
         _ = model(batch)
 
-    result_dict = defaultdict(list)
     repeats = 3
 
     pbar = tqdm(test_set)
@@ -63,8 +60,8 @@ def main(args: DictConfig):
             times.append(sol['info']['solve_time'])
             logger.info(f"repeat {r}: solver time: {sol['info']['solve_time']}")
         times = np.array(times) / 1000.
-        result_dict[f'{name}_solver_time_mean'].append(np.mean(times))
-        result_dict[f'{name}_solver_time_std'].append(np.std(times))
+        wandb.log({f'{name}_solver_time_mean': np.mean(times)})
+        wandb.log({f'{name}_solver_time_std': np.std(times)})
 
         batch = collate_fn_lp_base([data]).to(device)
 
@@ -92,12 +89,12 @@ def main(args: DictConfig):
 
         warm_times = np.array(warm_times) / 1000
         gnn_times = np.array(gnn_times)
-        result_dict[f'{name}_model_time_mean'].append(np.mean(gnn_times))
-        result_dict[f'{name}_model_time_std'].append(np.std(gnn_times))
-        result_dict[f'{name}_warmstart_time_mean'].append(np.mean(warm_times))
-        result_dict[f'{name}_warmstart_time_std'].append(np.std(warm_times))
 
-    wandb.log(result_dict)
+        wandb.log({f'{name}_gnn_mean': np.mean(gnn_times)})
+        wandb.log({f'{name}_gnn_std': np.std(gnn_times)})
+
+        wandb.log({f'{name}_warm_mean': np.mean(warm_times)})
+        wandb.log({f'{name}_warm_std': np.std(warm_times)})
 
 
 if __name__ == '__main__':
