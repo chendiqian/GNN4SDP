@@ -59,7 +59,7 @@ def main(args: DictConfig):
         m = A.shape[-1]
         times = []
         for r in range(repeats):
-            *_, sol = solve_sdp_scs(C, A, b, False, use_gpu)
+            *_, sol = solve_sdp_scs(C, A, b, regularization=1.e-5, verbose=False, gpu=use_gpu)
             times.append(sol['info']['solve_time'])
             logger.info(f"repeat {r}: solver time: {sol['info']['solve_time']}")
         times = np.array(times) / 1000.
@@ -86,7 +86,7 @@ def main(args: DictConfig):
             s = np.hstack([np.zeros(m), x])
             y = np.hstack([pred_dual.detach().cpu().numpy(),
                            map_vec(pred_slack.detach().cpu().numpy().reshape(n, n, 1)).squeeze()])
-            *_, sol = solve_sdp_scs(C, A, b, False, use_gpu, True, x=x, y=y, s=s)
+            *_, sol = solve_sdp_scs(C, A, b, regularization=1.e-5, verbose=False, gpu=use_gpu, warm_start=True, x=x, y=y, s=s)
             logger.info(f"warm start time: {sol['info']['solve_time']}")
             warm_times.append(sol['info']['solve_time'])
 

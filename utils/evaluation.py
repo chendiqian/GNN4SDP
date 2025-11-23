@@ -33,7 +33,7 @@ def mat(s):
     return S
 
 
-def solve_sdp_scs(C, A, b, verbose=False, gpu=False, warm_start=False, x=None, y=None, s=None):
+def solve_sdp_scs(C, A, b, regularization=0., verbose=False, gpu=False, warm_start=False, x=None, y=None, s=None):
     m = A.shape[-1]
     n = C.shape[0]
     nvec = (n + 1) * n // 2
@@ -53,7 +53,16 @@ def solve_sdp_scs(C, A, b, verbose=False, gpu=False, warm_start=False, x=None, y
     )
     b = np.hstack([b, np.zeros(nvec)])
 
-    data = dict(A=A_sp, b=b, c=c)
+    if regularization:
+        vals = np.ones(n * (n + 1) // 2, dtype=np.float32)
+        row_lengths = np.arange(n, 1, -1)
+        diag_indices = np.concatenate(([0], np.cumsum(row_lengths)))
+        vals[diag_indices] = 0.5
+        P = sparse.diags_array(vals, format='csc')
+        data = dict(P=P * regularization, A=A_sp, b=b, c=c)
+    else:
+        data = dict(A=A_sp, b=b, c=c)
+
     # zero cone: m equalities, spd cone: n times n
     cone = dict(z=m, s=n)
     # Setup workspace

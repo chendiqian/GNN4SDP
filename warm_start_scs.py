@@ -54,7 +54,7 @@ def main(args: DictConfig):
         A, C, b = recover_sdp_from_data(data)
         n = C.shape[0]
         m = A.shape[-1]
-        *_, sol = solve_sdp_scs(C, A, b, False, use_gpu)
+        *_, sol = solve_sdp_scs(C, A, b, verbose=False, gpu=use_gpu)
         vanilla_times.append(sol['info']['solve_time'])
 
         batch = collate_fn_lp_base([data]).to(device)
@@ -71,7 +71,7 @@ def main(args: DictConfig):
             s = np.hstack([np.zeros(m), x])
             y = np.hstack([pred_dual.detach().cpu().numpy(),
                            map_vec(pred_slack.detach().cpu().numpy().reshape(n, n, 1)).squeeze()])
-            *_, sol = solve_sdp_scs(C, A, b, False, use_gpu, True, x=x, y=y, s=s)
+            *_, sol = solve_sdp_scs(C, A, b, verbose=False, gpu=use_gpu, warm_start=True, x=x, y=y, s=s)
             warm_times.append(sol['info']['solve_time'])
         warm_started_time.append(np.mean(warm_times))
 
