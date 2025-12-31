@@ -202,7 +202,7 @@ class HigherOrder(torch.nn.Module):
                         vals = vals.reshape(B, N, N, -1)
 
                 # update
-                vals = self.higher_orders[i](vals, real_x_x_mask)
+                vals = self.higher_orders[i](vals, real_x_x_mask, data)
                 vals = self.norms[i](vals)
 
                 # flatten them for message passing or final prediction

@@ -19,7 +19,7 @@ class PPGNBlock(torch.nn.Module):
             self.ln = torch.nn.Identity()
 
     @torch.compile
-    def forward(self, inputs, mask=None):
+    def forward(self, inputs, mask, *args, **kwargs):
         x1 = self.mlp1(inputs)
         x2 = self.mlp2(inputs)
         if mask is not None:

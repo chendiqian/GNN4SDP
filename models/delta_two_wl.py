@@ -9,16 +9,29 @@ class GINEConv(torch.nn.Module):
     def __init__(self, hid_dim, num_mlp_layers, act):
         super().__init__()
 
-        self.lin_src = MLP([hid_dim] * (num_mlp_layers + 1), act=act, norm=None, plain_last=False)
+        self.lin_src = MLP([hid_dim + 1] + [hid_dim] * num_mlp_layers, act=act, norm=None, plain_last=False)
         self.lin_dst = MLP([hid_dim * 2] + [hid_dim] * num_mlp_layers, act=act, norm=None, plain_last=False)
         self.mlp = MLP([hid_dim] * (num_mlp_layers + 1), act=act, norm=None, plain_last=False)
         self.eps = torch.nn.Parameter(torch.Tensor([1.]))
 
     @torch.compile
-    def forward(self, inputs, mask, *args, **kwargs):
-        # B x N x N x F
-        # B x N x N
-        x = self.lin_src(inputs)
+    def forward(self, inputs, mask, data):
+        # we need distinguish local and nonlocal 2-wl neighbors
+
+        # inputs: B x N x N x F
+        # mask: B x N x N
+        B, N, _, _ = inputs.shape
+        index = data.b.new_ones(data['vals'].num_nodes, 1) * -1.
+        index[data.edge_index_dict[('obj', 'to', 'vals')][1]] = 1.
+        if mask is not None:
+            indicater = data.b.new_zeros(B, N, N, 1)
+            indicater[mask] = index
+        else:
+            indicater = index.reshape(B, N, N, 1)
+
+        x = torch.cat([inputs, indicater], dim=-1)
+
+        x = self.lin_src(x)
         n = x.shape[1]
         if mask is not None:
             aggr_x = x.sum(1) / mask.sum(2, keepdim=True).float()  # B x N x F, B x N x 1
@@ -36,7 +49,7 @@ class GINEConv(torch.nn.Module):
         return self.mlp(x_dst)
 
 
-class TwoWL(HigherOrder):
+class DeltaTwoWL(HigherOrder):
     def __init__(self,
                  no_mp,
                  no_wl,

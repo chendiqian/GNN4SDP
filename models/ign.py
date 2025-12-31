@@ -67,7 +67,7 @@ class Layer2to2(nn.Module):
         self.diag_bias = torch.nn.Parameter(torch.zeros(1, 1, 1, self.output_depth))
         self.all_bias = torch.nn.Parameter(torch.zeros(1, 1, 1, self.output_depth))
 
-    def forward(self, inputs, *args):
+    def forward(self, inputs, *args, **kwargs):
         """
         :param inputs: N x m x m x D tensor
         :return: output: N x m x m x S tensor

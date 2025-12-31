@@ -19,7 +19,7 @@ class FastEdgeAttention(torch.nn.Module):
         self.olin = torch.nn.Linear(embed_dim, embed_dim, bias=False)
 
     @torch.compile
-    def forward(self, inputs, mask=None):
+    def forward(self, inputs, mask, *args, **kwargs):
         # B N N F
         B, N, _, F = inputs.shape
 
