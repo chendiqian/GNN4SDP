@@ -55,7 +55,7 @@ def main(args: DictConfig):
         pbar = tqdm(range(args.train.epoch))
         for epoch in pbar:
             _ = trainer.train(train_loader, model, optimizer, device).item()
-            train_loss, train_obj_gap, _ = trainer.eval(train_loader, model, device, False)
+            train_loss, train_obj_gap, _, _, _ = trainer.eval(train_loader, model, device, False)
             train_loss = train_loss.item()
             train_obj_gap = train_obj_gap.item()
 
@@ -89,7 +89,7 @@ def main(args: DictConfig):
                                      shuffle=False,
                                      collate_fn=collate_fn_lp_base)
             name = graph.name
-            test_loss, test_obj_gap, psd_obj_gap = trainer.eval(test_loader, model, device, True)
+            test_loss, test_obj_gap, psd_obj_gap, _, _ = trainer.eval(test_loader, model, device, True)
             result_dict[f'{name}_loss'].append(test_loss.item())
             result_dict[f'{name}_objgap'].append(test_obj_gap.item())
             result_dict[f'{name}_psdobjgap'].append(psd_obj_gap.item())

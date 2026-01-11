@@ -1,26 +1,7 @@
-from typing import Optional
-
 import numpy as np
 import torch
-from torch import Tensor
-from torch_geometric.utils import cumsum, degree, unbatch
+from torch_geometric.utils import unbatch
 from torch_scatter import scatter
-
-
-def unbatch_edge_index(
-        edge_index: Tensor,
-        edge_attr: Tensor,
-        src_batch: Tensor,
-        dst_batch: Tensor,
-        batch_size: Optional[int] = None,
-):
-    deg = degree(dst_batch, batch_size, dtype=torch.long)
-    ptr = cumsum(deg)
-
-    edge_batch = src_batch[edge_index[0]]
-    edge_index = edge_index[1] - ptr[edge_batch]
-    sizes = degree(edge_batch, batch_size, dtype=torch.long).cpu().tolist()
-    return edge_index.split(sizes, dim=0), edge_attr.split(sizes, dim=0)
 
 
 class PlainGNNTrainer:
@@ -62,9 +43,11 @@ class PlainGNNTrainer:
         model.eval()
 
         val_losses = 0.
+        val_violations = 0.
         num_graphs = 0
-        objgaps = []
-        projected_objgaps = []
+        objgaps = 0.
+        projected_objgaps = 0.
+        projected_vios = 0.
         for i, data in enumerate(dataloader):
             data = data.to(device)
 
@@ -83,42 +66,50 @@ class PlainGNNTrainer:
                                data['obj', 'to', 'vals'].edge_attr.squeeze(1),
                                data['obj', 'to', 'vals'].edge_index[0], dim=0, reduce='sum')
             obj_gt = data.obj_solution
-            obj_gap = (obj_pred - obj_gt).abs() / torch.maximum(obj_gt.abs(), obj_gt.abs())
-            objgaps.append(obj_gap)
+            obj_gap = (obj_pred - obj_gt).abs() / obj_gt.abs()
+            objgaps += obj_gap.sum()
+
+            # violation
+            Ax_minus_b = scatter(pred_primal[data['vals', 'to', 'cons'].edge_index[0]] *
+                                 data['vals', 'to', 'cons'].edge_attr.squeeze(1),
+                                 data['vals', 'to', 'cons'].edge_index[1], dim=0, reduce='sum',
+                                 dim_size=data.b.shape[0]) - data.b
+            val_violations += scatter(Ax_minus_b.abs(), data.batch_dict['cons'], dim=0, reduce='mean').sum()
 
             # project onto PSD cone
             if project:
                 preds = unbatch(pred_primal, data.batch_dict['vals'], 0, data.num_graphs)
-                edges, coeffs = unbatch_edge_index(data['obj', 'to', 'vals'].edge_index,
-                                                   data['obj', 'to', 'vals'].edge_attr.squeeze(1),
-                                                   data.batch_dict['obj'],
-                                                   data.batch_dict['vals'],
-                                                   data.num_graphs)
 
-                objs = []
-                for x, edge, coeff in zip(preds, edges, coeffs):
+                x_projected = []
+                for x in preds:
                     n2 = x.shape[0]
                     n = int(n2 ** 0.5)
                     x = x.cpu().numpy().reshape(n, n)
-                    edge = edge.cpu().numpy()
                     eigval, eigvec = np.linalg.eigh(x)
-                    mask = eigval >= 0.
-                    eigval = eigval[None, mask]
-                    eigvec = eigvec[:, mask]
-                    src = edge // n
-                    dst = edge % n
-                    x_projected = (eigvec[src] * eigval * eigvec[dst]).sum(1)
-                    obj = (x_projected * coeff.cpu().numpy()).sum()
-                    objs.append(obj)
+                    eigval = np.where(eigval < 0, 0., eigval)
+                    x_p = (eigvec * eigval[None, :]) @ eigvec.T
+                    x_projected.append(x_p.reshape(-1))
+                x_projected = np.concatenate(x_projected, axis=0)
+                x_projected = torch.from_numpy(x_projected).to(device).float()
 
-                obj_gt = obj_gt.cpu().numpy()
-                objs = np.array(objs, dtype=np.float32)
-                projected_objgaps.append(np.abs(objs - obj_gt) / np.maximum(np.abs(objs), np.abs(obj_gt)))
+                # quick evaluation
+                obj_pred = scatter(x_projected[data['obj', 'to', 'vals'].edge_index[1]] *
+                                   data['obj', 'to', 'vals'].edge_attr.squeeze(1),
+                                   data['obj', 'to', 'vals'].edge_index[0], dim=0, reduce='sum')
+                obj_gap = (obj_pred - obj_gt).abs() / obj_gt.abs()
+                projected_objgaps += obj_gap.sum()
 
-        objgaps = torch.cat(objgaps, dim=0).mean()
+                # violation
+                Ax_minus_b = scatter(x_projected[data['vals', 'to', 'cons'].edge_index[0]] *
+                                     data['vals', 'to', 'cons'].edge_attr.squeeze(1),
+                                     data['vals', 'to', 'cons'].edge_index[1], dim=0, reduce='sum',
+                                     dim_size=data.b.shape[0]) - data.b
+                projected_vios += scatter(Ax_minus_b.abs(), data.batch_dict['cons'], dim=0, reduce='mean').sum()
+
         if projected_objgaps:
-            projected_objgaps = np.concatenate(projected_objgaps, axis=0).mean().item()
-            projected_objgaps = torch.tensor(projected_objgaps, device=device).float()
+            projected_objgaps = projected_objgaps / num_graphs
+            projected_vios = projected_vios / num_graphs
         else:
             projected_objgaps = torch.tensor(0., device=device).float()
-        return val_losses / num_graphs, objgaps, projected_objgaps
+            projected_vios = torch.tensor(0., device=device).float()
+        return val_losses / num_graphs, objgaps / num_graphs, projected_objgaps, val_violations / num_graphs, projected_vios

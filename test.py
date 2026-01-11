@@ -36,6 +36,8 @@ def main(args: DictConfig):
     test_losses = []
     test_objgaps = []
     psd_obj_gaps = []
+    test_vios = []
+    psd_vios = []
 
     model_dicts = os.listdir(args.train.modelpath)
     model_dicts = [m for m in model_dicts if m.startswith('best') and m.endswith('.pt')]
@@ -46,11 +48,13 @@ def main(args: DictConfig):
         model.load_state_dict(state_dict)
         trainer = PlainGNNTrainer(args.train.accum)
 
-        test_loss, test_obj_gap, psd_obj_gap = trainer.eval(test_loader, model, device, True)
+        test_loss, test_obj_gap, psd_obj_gap, vio, psd_vio = trainer.eval(test_loader, model, device, True)
 
         test_losses.append(test_loss.item())
         test_objgaps.append(test_obj_gap.item())
         psd_obj_gaps.append(psd_obj_gap.item())
+        test_vios.append(vio.item())
+        psd_vios.append(psd_vio.item())
 
     stats = {
         'test_loss_mean': np.mean(test_losses),
@@ -59,6 +63,10 @@ def main(args: DictConfig):
         'test_obj_gap_std': np.std(test_objgaps),
         'test_psd_obj_gap_mean': np.mean(psd_obj_gaps),
         'test_psd_obj_gap_std': np.std(psd_obj_gaps),
+        'test_vio_mean': np.mean(test_vios),
+        'test_vio_std': np.std(test_vios),
+        'test_psd_vio_mean': np.mean(psd_vios),
+        'test_psd_vio_std': np.std(psd_vios),
     }
 
     logger.info(', '.join([k + f':{v:.5f}' for k, v in stats.items()]))
