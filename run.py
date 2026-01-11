@@ -54,6 +54,8 @@ def main(args: DictConfig):
     test_losses = []
     test_objgaps = []
     psd_obj_gaps = []
+    test_vios = []
+    psd_vios = []
 
     for run in range(args.train.runs):
         model = get_model(args.gnn).to(device)
@@ -71,7 +73,7 @@ def main(args: DictConfig):
         pbar = tqdm(range(args.train.epoch))
         for epoch in pbar:
             train_loss = trainer.train(train_loader, model, optimizer, device).item()
-            val_loss, val_obj_gap, _ = trainer.eval(val_loader, model, device, False)
+            val_loss, val_obj_gap, _, _, _ = trainer.eval(val_loader, model, device, False)
             val_loss = val_loss.item()
             val_obj_gap = val_obj_gap.item()
 
@@ -99,22 +101,30 @@ def main(args: DictConfig):
             wandb.log(stats_dict)
 
         model.load_state_dict(best_model)
-        test_loss, test_obj_gap, psd_obj_gap = trainer.eval(test_loader, model, device, True)
+        test_loss, test_obj_gap, psd_obj_gap, vio, psd_vio = trainer.eval(test_loader, model, device, True)
 
         best_val_objgaps.append(trainer.best_objgap)
         test_losses.append(test_loss.item())
         test_objgaps.append(test_obj_gap.item())
         psd_obj_gaps.append(psd_obj_gap.item())
+        test_vios.append(vio.item())
+        psd_vios.append(psd_vio.item())
 
     wandb.log({
         'num_params': count_parameters(model),
         'best_val_obj_gap': np.mean(best_val_objgaps),
         'test_loss_mean': np.mean(test_losses),
         'test_loss_std': np.std(test_losses),
+
         'test_obj_gap_mean': np.mean(test_objgaps),
         'test_obj_gap_std': np.std(test_objgaps),
         'test_psd_obj_gap_mean': np.mean(psd_obj_gaps),
         'test_psd_obj_gap_std': np.std(psd_obj_gaps),
+
+        'test_vio_mean': np.mean(test_vios),
+        'test_vio_std': np.std(test_vios),
+        'test_psd_vio_mean': np.mean(psd_vios),
+        'test_psd_vio_std': np.std(psd_vios),
     })
 
 
