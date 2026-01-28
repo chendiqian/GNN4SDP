@@ -27,9 +27,25 @@ Replace `ppgn` with `edge_gt/two_wl/ign/mpnn` for other baselines.
 ### Maxcut
 `python run.py --config-name ppgn train.runs=5 train.datapath=/PATH/TO/DATASET gnn.num_conv_layers=10 gnn.no_mp=true gnn.no_dual=true`
 
-We can set no message passing mode, as the constraints are all equivalent and are on the diagonals, therefore all we need is an encoding for diagonal elements. However, if you wish to pretrain a model to warm start the SCS solver, you need predictions on the primal as well as slack and dual variables, therefore you should set `gnn.no_mp=false gnn.no_dual=false`.
+We can set no message passing mode, as the constraints are all equivalent and are on the diagonals, therefore all we need is an encoding for diagonal elements. However, if you wish to pretrain a model to warm start the SCS solver, you need predictions on the primal as well as slack and dual variables, therefore you should set `gnn.no_mp=false gnn.no_dual=false train.ckpt=true`.
 
-If Edge GT runs OOM, use batch gradient accumulation by setting a smaller batch size and `train.accum > 1`.
+If Edge GT runs OOM, use batch gradient accumulation by setting a smaller batch size and `train.accum > 1`. Besides, Edge GT is better with the message passing  
+`python run.py --config-name edge_gt train.runs=5 train.datapath=/PATH/TO/DATASET gnn.num_conv_layers=10 gnn.no_mp=false gnn.no_dual=true`
+
+### Lovasz
+`python run.py --config-name ppgn train.runs=5 train.datapath=/PATH/TO/DATASET gnn.num_conv_layers=6 gnn.no_mp=false gnn.no_dual=true`
+
+### MIS
+`python run.py --config-name ppgn train.runs=5 train.datapath=/PATH/TO/DATASET gnn.num_conv_layers=6 gnn.no_mp=false gnn.no_dual=true`
+
+### Cover
+`python run.py --config-name ppgn train.runs=5 train.datapath=/PATH/TO/DATASET gnn.num_conv_layers=10 gnn.no_mp=false gnn.no_dual=true`
+
+### SAT 
+`python run.py --config-name ppgn train.runs=5 train.datapath=/PATH/TO/DATASET gnn.num_conv_layers=10 gnn.no_mp=true gnn.no_dual=true`
+
+### LMI
+`python run.py --config-name ppgn train.runs=5 train.datapath=/PATH/TO/DATASET gnn.num_conv_layers=6 gnn.no_mp=false gnn.no_dual=true`
 
 ## Replicate runtime
 
@@ -41,6 +57,9 @@ For timing the neural architectures, run
 
 For warm starting the SCS solver, run  
 `python warm_start_scs.py --config-name ppgn +train.modelpath="/PATH/TO/MODEL_FOLDER" train.datapath="/PATH/TO/DATASET" gnn.no_dual=false` plus some extra `gnn` parameters. Note that a pretrained model directory `"/PATH/TO/MODEL_FOLDER"` is necessary. 
+
+For testing pretrained model on OOD data, run
+`python test.py --config-name ppgn +train.modelpath="/PATH/TO/MODEL_FOLDER" train.datapath="/PATH/TO/DATASET"`
 
 ## Real-world dataset: SDPLIB
 See [SDPLIB](https://github.com/vsdp/SDPLIB) for dataset statistics and downloading. Then you can process the SDPLIB data into our training format with SDPLIB.ipynb. 
