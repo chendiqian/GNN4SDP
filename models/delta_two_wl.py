@@ -9,7 +9,7 @@ class GINEConv(torch.nn.Module):
     def __init__(self, hid_dim, num_mlp_layers, act):
         super().__init__()
 
-        self.lin_src = MLP([hid_dim * 2] + [hid_dim] * num_mlp_layers, act=act, norm=None, plain_last=False)
+        self.lin_src = MLP([hid_dim] + [hid_dim] * num_mlp_layers, act=act, norm=None, plain_last=False)
         self.lin_dst = MLP([hid_dim * 2] + [hid_dim] * num_mlp_layers, act=act, norm=None, plain_last=False)
         self.mlp = MLP([hid_dim] * (num_mlp_layers + 1), act=act, norm=None, plain_last=False)
         self.eps = torch.nn.Parameter(torch.Tensor([1.]))
@@ -31,7 +31,7 @@ class GINEConv(torch.nn.Module):
 
         indicated = torch.einsum('bnmd,bmld->bnld', inputs, indicater)
         indicated = indicated + indicated.transpose(1, 2)
-        x = torch.cat([inputs, indicated], dim=-1)
+        x = inputs + indicated
 
         x = self.lin_src(x)
         n = x.shape[1]
