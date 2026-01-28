@@ -30,6 +30,7 @@ class GINEConv(torch.nn.Module):
         else:
             indicater = index.reshape(B, N, N, 1)
 
+        assert indicater.min() == 0.   # otherwise reduce to 2WL
         indicated = torch.einsum('bnmd,bmld->bnld', inputs, indicater)
         indicated = indicated + indicated.transpose(1, 2)
         indicated = self.ln(indicated)
