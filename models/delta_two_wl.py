@@ -29,7 +29,9 @@ class GINEConv(torch.nn.Module):
         else:
             indicater = index.reshape(B, N, N, 1)
 
-        x = torch.cat([inputs, indicater], dim=-1)
+        indicated = torch.einsum('bnmd,bmld->bnld', inputs, indicater)
+        indicated = indicated + indicated.transpose(1, 2)
+        x = torch.cat([inputs, indicated], dim=-1)
 
         x = self.lin_src(x)
         n = x.shape[1]
