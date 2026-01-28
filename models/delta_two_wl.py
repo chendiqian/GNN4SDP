@@ -13,6 +13,7 @@ class GINEConv(torch.nn.Module):
         self.lin_dst = MLP([hid_dim * 2] + [hid_dim] * num_mlp_layers, act=act, norm=None, plain_last=False)
         self.mlp = MLP([hid_dim] * (num_mlp_layers + 1), act=act, norm=None, plain_last=False)
         self.eps = torch.nn.Parameter(torch.Tensor([1.]))
+        self.ln = torch.nn.LayerNorm(hid_dim)
 
     @torch.compile
     def forward(self, inputs, mask, data):
@@ -31,6 +32,7 @@ class GINEConv(torch.nn.Module):
 
         indicated = torch.einsum('bnmd,bmld->bnld', inputs, indicater)
         indicated = indicated + indicated.transpose(1, 2)
+        indicated = self.ln(indicated)
         x = inputs + indicated
 
         x = self.lin_src(x)
