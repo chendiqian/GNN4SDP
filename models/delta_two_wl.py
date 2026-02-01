@@ -10,19 +10,32 @@ class GINEConv(torch.nn.Module):
         super().__init__()
 
         self.lin_src = MLP([hid_dim] + [hid_dim] * num_mlp_layers, act=act, norm=None, plain_last=False)
-        self.lin_dst = MLP([hid_dim * 2] + [hid_dim] * num_mlp_layers, act=act, norm=None, plain_last=False)
+        self.lin2_src = MLP([hid_dim] + [hid_dim] * num_mlp_layers, act=act, norm=None, plain_last=False)
+        self.lin_dst = MLP([hid_dim * 2] + [hid_dim] * num_mlp_layers, act=act, norm='layernorm', plain_last=False)
         self.mlp = MLP([hid_dim] * (num_mlp_layers + 1), act=act, norm=None, plain_last=False)
         self.eps = torch.nn.Parameter(torch.Tensor([1.]))
-        self.ln = torch.nn.LayerNorm(hid_dim)
 
-    @torch.compile
     def forward(self, inputs, mask, data):
         # we need distinguish local and nonlocal 2-wl neighbors
 
         # inputs: B x N x N x F
         # mask: B x N x N
         B, N, _, _ = inputs.shape
-        index = data.b.new_ones(data['vals'].num_nodes, 1) * -1.
+
+        # row, col aggr
+        x = self.lin_src(inputs)
+        if mask is not None:
+            aggr_x = x.sum(1) / mask.sum(2, keepdim=True).float()  # B x N x F, B x N x 1
+        else:
+            aggr_x = x.mean(1)
+        # repeat at dim=2, so that the elements on each row share the same
+        aggr_x = aggr_x.unsqueeze(2).repeat(1, 1, N, 1)  # B x N x N x F
+        if mask is not None:
+            aggr_x = aggr_x.masked_fill(~mask.unsqueeze(3), 0.)
+
+        # adj matmul aggr
+        # todo: this can be more efficient
+        index = data.b.new_zeros(data['vals'].num_nodes, 1)
         index[data.edge_index_dict[('obj', 'to', 'vals')][1]] = 1.
         if mask is not None:
             indicater = data.b.new_zeros(B, N, N, 1)
@@ -30,26 +43,14 @@ class GINEConv(torch.nn.Module):
         else:
             indicater = index.reshape(B, N, N, 1)
 
-        assert indicater.min() == 0.   # otherwise reduce to 2WL
-        indicated = torch.einsum('bnmd,bmld->bnld', inputs, indicater)
-        indicated = indicated + indicated.transpose(1, 2)
-        indicated = self.ln(indicated)
-        x = inputs + indicated
+        x = self.lin2_src(inputs)
+        # H @ adj
+        indicated = torch.einsum('bnmd,bmld->bnld', x, indicater) / (indicater.sum(1, keepdim=True) + 1.e-5)
 
-        x = self.lin_src(x)
-        n = x.shape[1]
-        if mask is not None:
-            aggr_x = x.sum(1) / mask.sum(2, keepdim=True).float()  # B x N x F, B x N x 1
-        else:
-            aggr_x = x.mean(1)
-        aggr_x = aggr_x.unsqueeze(1).repeat(1, n, 1, 1)  # B x N x N x F
-        if mask is not None:
-            aggr_x = aggr_x.masked_fill(~mask.unsqueeze(3), 0.)
+        embedding = torch.cat([aggr_x, indicated], dim=-1)  # the 2WL tuple
 
-        triu_mask = upper_triangle_mask(n, x.device)
-        aggr_tuple = torch.cat([aggr_x, aggr_x.transpose(1, 2)], dim=-1)  # the 2WL tuple
-        aggr_tuple = torch.where(triu_mask[None, :, :, None], aggr_tuple, aggr_tuple.transpose(1, 2))
-        msg = self.lin_dst(aggr_tuple)
+        msg = self.lin_dst(embedding)
+        msg = msg + msg.transpose(1, 2)
         x_dst = (1 + self.eps) * inputs + msg
         return self.mlp(x_dst)
 
