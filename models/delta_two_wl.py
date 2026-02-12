@@ -11,10 +11,11 @@ class GINEConv(torch.nn.Module):
 
         self.lin_src = MLP([hid_dim] + [hid_dim] * num_mlp_layers, act=act, norm=None, plain_last=False)
         self.lin2_src = MLP([hid_dim] + [hid_dim] * num_mlp_layers, act=act, norm=None, plain_last=False)
-        self.lin_dst = MLP([hid_dim * 2] + [hid_dim] * num_mlp_layers, act=act, norm='layernorm', plain_last=False)
+        self.lin_dst = MLP([hid_dim] + [hid_dim] * num_mlp_layers, act=act, norm='layernorm', plain_last=False)
         self.mlp = MLP([hid_dim] * (num_mlp_layers + 1), act=act, norm=None, plain_last=False)
         self.eps = torch.nn.Parameter(torch.Tensor([1.]))
 
+    @torch.compile
     def forward(self, inputs, mask, data):
         # we need distinguish local and nonlocal 2-wl neighbors
 
@@ -36,7 +37,9 @@ class GINEConv(torch.nn.Module):
         # adj matmul aggr
         # todo: this can be more efficient
         index = data.b.new_zeros(data['vals'].num_nodes, 1)
-        index[data.edge_index_dict[('obj', 'to', 'vals')][1]] = 1.
+        index[data.edge_index_dict[('obj', 'to', 'vals')][1]] = data.edge_attr_dict[('obj', 'to', 'vals')]
+
+        # todo: try to encode this as well
         if mask is not None:
             indicater = data.b.new_zeros(B, N, N, 1)
             indicater[mask] = index
@@ -45,9 +48,11 @@ class GINEConv(torch.nn.Module):
 
         x = self.lin2_src(inputs)
         # H @ adj
-        indicated = torch.einsum('bnmd,bmld->bnld', x, indicater) / (indicater.sum(1, keepdim=True) + 1.e-5)
+        # todo: N ** 0.5
+        indicated = torch.einsum('bnmd,bmld->bnld', x, indicater) / (N ** 0.5)
 
-        embedding = torch.cat([aggr_x, indicated], dim=-1)  # the 2WL tuple
+        # todo: try add
+        embedding = aggr_x + indicated
 
         msg = self.lin_dst(embedding)
         msg = msg + msg.transpose(1, 2)
