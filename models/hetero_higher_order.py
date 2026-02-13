@@ -164,22 +164,22 @@ class HigherOrder(torch.nn.Module):
             B = batch_dict['_vals'].max() + 1
             N = batch_dict['_vals'].shape[0] // B
 
-        vals_embedding = data.b.new_zeros(data['vals'].num_nodes, 1)
-        vals_embedding[edge_index_dict[('obj', 'to', 'vals')][1]] = edge_attr_dict[('obj', 'to', 'vals')]
+        vals_encoding = data.b.new_zeros(data['vals'].num_nodes, 1)
+        vals_encoding[edge_index_dict[('obj', 'to', 'vals')][1]] = edge_attr_dict[('obj', 'to', 'vals')]
         # encode the diagonal entries
         diag_enc = torch.eye(N, dtype=torch.float, device=data.b.device)[None].repeat(B, 1, 1)
         if real_x_x_mask is not None:
             diag_enc = diag_enc[real_x_x_mask][..., None]
         else:
             diag_enc = diag_enc.reshape(-1, 1)
-        vals_embedding = torch.hstack([diag_enc, vals_embedding])
+        vals_embedding = torch.hstack([diag_enc, vals_encoding])
         vals_embedding = self.vals_encoder(vals_embedding)
 
         x_dict: Dict[NodeType, torch.FloatTensor] = {'vals': vals_embedding, 'cons': cons_embedding}
-        return batch_dict, edge_index_dict, edge_attr_dict, x_dict, real_x_x_mask
+        return batch_dict, edge_index_dict, edge_attr_dict, x_dict, real_x_x_mask, vals_encoding
 
     def forward(self, data):
-        batch_dict, edge_index_dict, edge_attr_dict, x_dict, real_x_x_mask = self.init_embedding(data)
+        batch_dict, edge_index_dict, edge_attr_dict, x_dict, real_x_x_mask, vals_encoding = self.init_embedding(data)
         if real_x_x_mask is not None:
             B = real_x_x_mask.shape[0]
             N = real_x_x_mask.shape[1]
@@ -191,11 +191,11 @@ class HigherOrder(torch.nn.Module):
         cons, vals = x_dict['cons'], x_dict['vals']
 
         if real_x_x_mask is not None:
-            vinit_dense = torch.zeros(*real_x_x_mask.shape + (vals.shape[-1],), device=vals.device, dtype=torch.float)
-            vinit_dense[real_x_x_mask] = vals
-            vals_init = vinit_dense
+            vinit_dense = torch.zeros(*real_x_x_mask.shape + (vals_encoding.shape[-1],), device=vals.device, dtype=torch.float)
+            vinit_dense[real_x_x_mask] = vals_encoding
+            vals_encoding = vinit_dense
         else:
-            vals_init = vals.reshape(B, N, N, -1)
+            vals_encoding = vals_encoding.reshape(B, N, N, -1)
 
         for i in range(self.num_conv_layers):
             # WL
@@ -210,7 +210,7 @@ class HigherOrder(torch.nn.Module):
                         vals = vals.reshape(B, N, N, -1)
 
                 # update
-                vals = self.higher_orders[i](vals, real_x_x_mask, vals_init)
+                vals = self.higher_orders[i](vals, real_x_x_mask, vals_encoding)
                 vals = self.norms[i](vals)
 
                 # flatten them for message passing or final prediction
