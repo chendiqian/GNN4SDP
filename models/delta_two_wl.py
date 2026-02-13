@@ -1,5 +1,3 @@
-import pdb
-
 import torch
 from torch_geometric.nn import MLP
 
@@ -20,8 +18,6 @@ class GINEConv(torch.nn.Module):
     # @torch.compile
     def forward(self, inputs, mask, vals_init):
         # we need distinguish local and nonlocal 2-wl neighbors
-
-        pdb.set_trace()
 
         # inputs: B x N x N x F
         # mask: B x N x N
