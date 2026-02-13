@@ -15,7 +15,7 @@ class GINEConv(torch.nn.Module):
         self.mlp = MLP([hid_dim] * (num_mlp_layers + 1), act=act, norm=None, plain_last=False)
         self.eps = torch.nn.Parameter(torch.Tensor([1.]))
 
-    # @torch.compile
+    @torch.compile
     def forward(self, inputs, mask, vals_init):
         # we need distinguish local and nonlocal 2-wl neighbors
 
