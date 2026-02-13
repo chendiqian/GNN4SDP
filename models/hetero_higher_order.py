@@ -189,6 +189,14 @@ class HigherOrder(torch.nn.Module):
 
         # init vals is flat!
         cons, vals = x_dict['cons'], x_dict['vals']
+
+        if real_x_x_mask is not None:
+            vinit_dense = torch.zeros(*real_x_x_mask.shape + (vals.shape[-1],), device=vals.device, dtype=torch.float)
+            vinit_dense[real_x_x_mask] = vals
+            vals_init = vinit_dense
+        else:
+            vals_init = vals.reshape(B, N, N, -1)
+
         for i in range(self.num_conv_layers):
             # WL
             if self.higher_orders and self.norms:
@@ -202,7 +210,7 @@ class HigherOrder(torch.nn.Module):
                         vals = vals.reshape(B, N, N, -1)
 
                 # update
-                vals = self.higher_orders[i](vals, real_x_x_mask, data)
+                vals = self.higher_orders[i](vals, real_x_x_mask, vals_init)
                 vals = self.norms[i](vals)
 
                 # flatten them for message passing or final prediction
