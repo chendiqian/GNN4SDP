@@ -172,8 +172,8 @@ class HigherOrder(torch.nn.Module):
             diag_enc = diag_enc[real_x_x_mask][..., None]
         else:
             diag_enc = diag_enc.reshape(-1, 1)
-        vals_embedding = torch.hstack([diag_enc, vals_encoding])
-        vals_embedding = self.vals_encoder(vals_embedding)
+        vals_encoding = torch.hstack([diag_enc, vals_encoding])
+        vals_embedding = self.vals_encoder(vals_encoding)
 
         x_dict: Dict[NodeType, torch.FloatTensor] = {'vals': vals_embedding, 'cons': cons_embedding}
         return batch_dict, edge_index_dict, edge_attr_dict, x_dict, real_x_x_mask, vals_encoding
