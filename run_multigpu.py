@@ -63,7 +63,7 @@ def main(args: DictConfig):
         log_folder_name = save_run_config(args)
         setup_wandb(args)
         best_val_objs = []
-        test_gaps = []
+        test_objs = []
         test_vios = []
         test_objgaps = []
 
@@ -88,20 +88,20 @@ def main(args: DictConfig):
         for epoch in range(args.train.epoch):
             train_sampler.set_epoch(epoch)
             train_loss = trainer.train(train_loader, model, optimizer, local_rank)
-            val_gap, val_obj_gap, val_vio = trainer.eval(val_loader, model, local_rank)
+            val_obj, val_obj_gap, val_vio = trainer.eval(val_loader, model, local_rank)
 
             dist.all_reduce(train_loss, op=dist.ReduceOp.AVG)
-            dist.all_reduce(val_gap, op=dist.ReduceOp.AVG)
+            dist.all_reduce(val_obj, op=dist.ReduceOp.AVG)
             dist.all_reduce(val_obj_gap, op=dist.ReduceOp.AVG)
             dist.all_reduce(val_vio, op=dist.ReduceOp.AVG)
 
-            val_gap = val_gap.item()
+            val_obj = val_obj.item()
             if scheduler is not None:
-                scheduler.step(val_gap)
+                scheduler.step(val_obj)
 
-            if trainer.best_objgap > val_gap:
+            if trainer.best_objgap > val_obj:
                 trainer.patience = 0
-                trainer.best_objgap = val_gap
+                trainer.best_objgap = val_obj
                 best_model = copy.deepcopy(model.state_dict())
                 if args.train.ckpt and rank == 0:
                     torch.save(model.module.state_dict(), os.path.join(log_folder_name, f'best_model{run}.pt'))
@@ -113,7 +113,7 @@ def main(args: DictConfig):
 
             if rank == 0:
                 stats_dict = {'train_loss': train_loss,
-                              'val_gap': val_gap,
+                              'val_obj': val_obj,
                               'val_vio': val_vio,
                               'val_obj_gap': val_obj_gap,
                               'lr': scheduler.optimizer.param_groups[0]["lr"]}
@@ -122,26 +122,26 @@ def main(args: DictConfig):
 
         dist.barrier()
         model.load_state_dict(best_model)
-        test_gap, test_obj_gap, test_vio = trainer.eval(test_loader, model, local_rank)
+        test_obj, test_obj_gap, test_vio = trainer.eval(test_loader, model, local_rank)
 
-        dist.all_reduce(test_gap, op=dist.ReduceOp.AVG)
+        dist.all_reduce(test_obj, op=dist.ReduceOp.AVG)
         dist.all_reduce(test_obj_gap, op=dist.ReduceOp.AVG)
         dist.barrier()
         test_obj_gap = test_obj_gap.item()
-        test_gap = test_gap.item()
+        test_obj = test_obj.item()
 
         if rank == 0:
             best_val_objs.append(trainer.best_objgap)
             test_objgaps.append(test_obj_gap)
-            test_gaps.append(test_gap)
+            test_objs.append(test_obj)
             test_vios.append(test_vio)
 
     if rank == 0:
         wandb.log({
             'num_params': count_parameters(model),
             'best_val_obj_gap': np.mean(best_val_objs),
-            'test_gap_mean': np.mean(test_gaps),
-            'test_gap_std': np.std(test_gaps),
+            'test_gap_mean': np.mean(test_objs),
+            'test_gap_std': np.std(test_objs),
             'test_vio_mean': np.mean(test_vios),
             'test_vio_std': np.std(test_vios),
             'test_obj_gap_mean': np.mean(test_objgaps),
