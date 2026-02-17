@@ -227,14 +227,9 @@ class HigherOrder(torch.nn.Module):
         # pred_primal = self.predictor(vals).squeeze()
         # pred_slack = self.predictor2(vals).squeeze() if self.predictor2 else None
 
-        if real_x_x_mask is not None:
-            final = torch.zeros(*real_x_x_mask.shape + (vals.shape[-1],), device=vals.device, dtype=torch.float)
-            final[real_x_x_mask] = vals
-            vals = final
-        else:
-            vals = vals.reshape(B, N, N, -1)
-
+        vals = vals.reshape(B, N, N, -1)
         duals = torch.diagonal(vals, dim1=1, dim2=2)
+        duals = duals.reshape(B * N, vals.shape[-1])
 
         pred_dual = self.predictor(duals).squeeze()
         return pred_dual
