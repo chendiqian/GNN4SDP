@@ -16,7 +16,7 @@ from torch.utils.data.distributed import DistributedSampler
 from data.collate_func import collate_fn_lp_base
 from data.dataset import LPDataset
 from models import get_model
-from trainer import PlainGNNTrainer
+from trainer import SSLDualTrainer
 from utils.experiment import save_run_config, setup_wandb, count_parameters
 
 torch.set_float32_matmul_precision('high')
@@ -62,12 +62,9 @@ def main(args: DictConfig):
     if rank == 0:
         log_folder_name = save_run_config(args)
         setup_wandb(args)
-        best_val_objgaps = []
-        test_losses = []
+        best_val_objs = []
+        test_gaps = []
         test_objgaps = []
-        psd_obj_gaps = []
-        test_vios = []
-        psd_vios = []
 
     torch.cuda.set_device(local_rank)
     for run in range(args.train.runs):
@@ -85,24 +82,24 @@ def main(args: DictConfig):
                                                          patience=int(args.train.patience * 0.6),
                                                          min_lr=1.e-5)
 
-        trainer = PlainGNNTrainer(args.train.accum)
+        trainer = SSLDualTrainer(args.train.accum)
 
         for epoch in range(args.train.epoch):
             train_sampler.set_epoch(epoch)
             train_loss = trainer.train(train_loader, model, optimizer, local_rank)
-            val_loss, val_obj_gap, _, _, _ = trainer.eval(val_loader, model, local_rank, False)
+            val_gap, val_obj_gap = trainer.eval(val_loader, model, local_rank)
 
             dist.all_reduce(train_loss, op=dist.ReduceOp.AVG)
-            dist.all_reduce(val_loss, op=dist.ReduceOp.AVG)
+            dist.all_reduce(val_gap, op=dist.ReduceOp.AVG)
             dist.all_reduce(val_obj_gap, op=dist.ReduceOp.AVG)
 
-            val_obj_gap = val_obj_gap.item()
+            val_gap = val_gap.item()
             if scheduler is not None:
-                scheduler.step(val_obj_gap)
+                scheduler.step(val_gap)
 
-            if trainer.best_objgap > val_obj_gap:
+            if trainer.best_objgap > val_gap:
                 trainer.patience = 0
-                trainer.best_objgap = val_obj_gap
+                trainer.best_objgap = val_gap
                 best_model = copy.deepcopy(model.state_dict())
                 if args.train.ckpt and rank == 0:
                     torch.save(model.module.state_dict(), os.path.join(log_folder_name, f'best_model{run}.pt'))
@@ -114,7 +111,7 @@ def main(args: DictConfig):
 
             if rank == 0:
                 stats_dict = {'train_loss': train_loss,
-                              'val_loss': val_loss,
+                              'val_gap': val_gap,
                               'val_obj_gap': val_obj_gap,
                               'lr': scheduler.optimizer.param_groups[0]["lr"]}
                 wandb.log(stats_dict)
@@ -122,44 +119,28 @@ def main(args: DictConfig):
 
         dist.barrier()
         model.load_state_dict(best_model)
-        test_loss, test_obj_gap, psd_obj_gap, vio, psd_vio = trainer.eval(test_loader, model, local_rank, True)
+        test_gap, test_obj_gap = trainer.eval(test_loader, model, local_rank)
 
-        dist.all_reduce(test_loss, op=dist.ReduceOp.AVG)
+        dist.all_reduce(test_gap, op=dist.ReduceOp.AVG)
         dist.all_reduce(test_obj_gap, op=dist.ReduceOp.AVG)
-        dist.all_reduce(psd_obj_gap, op=dist.ReduceOp.AVG)
-        dist.all_reduce(vio, op=dist.ReduceOp.AVG)
-        dist.all_reduce(psd_vio, op=dist.ReduceOp.AVG)
         dist.barrier()
         test_obj_gap = test_obj_gap.item()
-        psd_obj_gap = psd_obj_gap.item()
-        test_loss = test_loss.item()
-        vio = vio.item()
-        psd_vio = psd_vio.item()
+        test_gap = test_gap.item()
 
         if rank == 0:
-            best_val_objgaps.append(trainer.best_objgap)
+            best_val_objs.append(trainer.best_objgap)
             test_objgaps.append(test_obj_gap)
-            psd_obj_gaps.append(psd_obj_gap)
-            test_losses.append(test_loss)
-            test_vios.append(vio)
-            psd_vios.append(psd_vio)
+            test_gaps.append(test_gap)
 
     if rank == 0:
         wandb.log({
             'num_params': count_parameters(model),
-            'best_val_obj_gap': np.mean(best_val_objgaps),
-            'test_loss_mean': np.mean(test_losses),
-            'test_loss_std': np.std(test_losses),
+            'best_val_obj_gap': np.mean(best_val_objs),
+            'test_gap_mean': np.mean(test_gaps),
+            'test_gap_std': np.std(test_gaps),
 
             'test_obj_gap_mean': np.mean(test_objgaps),
             'test_obj_gap_std': np.std(test_objgaps),
-            'test_psd_obj_gap_mean': np.mean(psd_obj_gaps),
-            'test_psd_obj_gap_std': np.std(psd_obj_gaps),
-
-            'test_vio_mean': np.mean(test_vios),
-            'test_vio_std': np.std(test_vios),
-            'test_psd_vio_mean': np.mean(psd_vios),
-            'test_psd_vio_std': np.std(psd_vios),
         })
 
     dist.barrier()

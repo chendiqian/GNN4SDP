@@ -166,11 +166,11 @@ class HigherOrder(torch.nn.Module):
             diag_enc = diag_enc[real_x_x_mask][..., None]
         else:
             diag_enc = diag_enc.reshape(-1, 1)
-        vals_encoding = torch.hstack([diag_enc, vals_encoding])
-        vals_embedding = self.vals_encoder(vals_encoding)
+        vals_embedding = torch.hstack([diag_enc, vals_encoding])
+        vals_embedding = self.vals_encoder(vals_embedding)
 
         x_dict: Dict[NodeType, torch.FloatTensor] = {'vals': vals_embedding, 'cons': cons_embedding}
-        return batch_dict, edge_index_dict, edge_attr_dict, x_dict, real_x_x_mask, vals_encoding
+        return batch_dict, edge_index_dict, edge_attr_dict, x_dict, real_x_x_mask, vals_encoding.squeeze(1)
 
     def forward(self, data):
         batch_dict, edge_index_dict, edge_attr_dict, x_dict, real_x_x_mask, vals_encoding = self.init_embedding(data)
@@ -183,13 +183,6 @@ class HigherOrder(torch.nn.Module):
 
         # init vals is flat!
         cons, vals = x_dict['cons'], x_dict['vals']
-
-        if real_x_x_mask is not None:
-            vinit_dense = torch.zeros(*real_x_x_mask.shape + (vals_encoding.shape[-1],), device=vals.device, dtype=torch.float)
-            vinit_dense[real_x_x_mask] = vals_encoding
-            vals_encoding = vinit_dense
-        else:
-            vals_encoding = vals_encoding.reshape(B, N, N, -1)
 
         for i in range(self.num_conv_layers):
             # WL
@@ -204,7 +197,7 @@ class HigherOrder(torch.nn.Module):
                         vals = vals.reshape(B, N, N, -1)
 
                 # update
-                vals = self.higher_orders[i](vals, real_x_x_mask, vals_encoding)
+                vals = self.higher_orders[i](vals, real_x_x_mask)
                 vals = self.norms[i](vals)
 
                 # flatten them for message passing or final prediction
@@ -221,4 +214,8 @@ class HigherOrder(torch.nn.Module):
         vals = vals.reshape(B, N, N, -1)
         pred_dual = self.predictor(vals).reshape(-1)
 
-        return pred_dual
+        vals_encoding[edge_index_dict[('cons', 'to', 'vals')][1]] -= edge_attr_dict[('cons', 'to', 'vals')].squeeze() * pred_dual
+        C_minus_yA = vals_encoding.reshape(B, N, N)
+        eigvals = torch.linalg.eigvalsh(C_minus_yA)
+
+        return pred_dual, eigvals
