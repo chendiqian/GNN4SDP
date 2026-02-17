@@ -127,12 +127,12 @@ class HigherOrder(torch.nn.Module):
 
         # higher order NN is defined in separate instantiations!
         self.predictor = MLP([hid_dim] * num_pred_layers + [1], act=act, norm=None)
-        self.predictor2 = None
-        self.predictor3 = None
-        if not no_dual:
-            assert not no_mp, "Require message passing to predict slack variable!"
-            self.predictor2 = MLP([hid_dim] * num_pred_layers + [1], act=act, norm=None)
-            self.predictor3 = MLP([hid_dim] * num_pred_layers + [1], act=act, norm=None)
+        # self.predictor2 = None
+        # self.predictor3 = None
+        # if not no_dual:
+        #     assert not no_mp, "Require message passing to predict slack variable!"
+        #     self.predictor2 = MLP([hid_dim] * num_pred_layers + [1], act=act, norm=None)
+        #     self.predictor3 = MLP([hid_dim] * num_pred_layers + [1], act=act, norm=None)
 
     def init_higher_order_layers(self, *args, **kwargs):
         raise NotImplementedError
@@ -224,7 +224,17 @@ class HigherOrder(torch.nn.Module):
             if self.gcns:
                 vals, cons = self.gcns[i](cons, vals, batch_dict, edge_index_dict, edge_attr_dict)
 
-        pred_primal = self.predictor(vals).squeeze()
-        pred_slack = self.predictor2(vals).squeeze() if self.predictor2 else None
-        pred_dual = self.predictor3(cons).squeeze() if self.predictor3 else None
-        return pred_primal, pred_slack, pred_dual
+        # pred_primal = self.predictor(vals).squeeze()
+        # pred_slack = self.predictor2(vals).squeeze() if self.predictor2 else None
+
+        if real_x_x_mask is not None:
+            final = torch.zeros(*real_x_x_mask.shape + (vals.shape[-1],), device=vals.device, dtype=torch.float)
+            final[real_x_x_mask] = vals
+            vals = final
+        else:
+            vals = vals.reshape(B, N, N, -1)
+
+        duals = torch.diagonal(vals, dim1=1, dim2=2)
+
+        pred_dual = self.predictor(duals).squeeze()
+        return pred_dual

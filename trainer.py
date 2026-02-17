@@ -113,3 +113,58 @@ class PlainGNNTrainer:
             projected_objgaps = torch.tensor(0., device=device).float()
             projected_vios = torch.tensor(0., device=device).float()
         return val_losses / num_graphs, objgaps / num_graphs, projected_objgaps, val_violations / num_graphs, projected_vios
+
+
+class SupervisedDualTrainer:
+    def __init__(self, accum):
+        self.best_objgap = 1.e8
+        self.patience = 0
+        self.accum = accum
+
+    def train(self, dataloader, model, optimizer, device):
+        model.train()
+
+        train_losses = 0.
+        num_graphs = 0
+        optimizer.zero_grad()
+        for i, data in enumerate(dataloader):
+            data = data.to(device)
+
+            pred_dual = model(data)
+            loss = scatter((pred_dual - data.y_solution) ** 2, data.batch_dict['cons'], dim=0, reduce='mean').mean()
+
+            train_losses += loss.detach() * data.num_graphs
+            num_graphs += data.num_graphs
+
+            loss = loss / self.accum
+            loss.backward()
+            if (i + 1) % self.accum == 0 or (i + 1) == len(dataloader):
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0, error_if_nonfinite=True)
+                optimizer.step()
+                optimizer.zero_grad()
+
+        return train_losses / num_graphs
+
+    @torch.no_grad()
+    def eval(self, dataloader, model, device):
+        model.eval()
+
+        val_losses = 0.
+        num_graphs = 0
+        objgaps = 0.
+        for i, data in enumerate(dataloader):
+            data = data.to(device)
+
+            pred_dual = model(data)
+            loss = scatter((pred_dual - data.y_solution) ** 2, data.batch_dict['cons'], dim=0, reduce='mean')
+
+            val_losses += loss.sum()
+            num_graphs += data.num_graphs
+
+            # quick evaluation
+            obj_pred = -scatter(pred_dual * data.b, data.batch_dict['cons'], dim=0, reduce='sum')
+            obj_gt = data.obj_solution
+            obj_gap = (obj_pred - obj_gt).abs() / obj_gt.abs()
+            objgaps += obj_gap.sum()
+
+        return val_losses / num_graphs, objgaps / num_graphs
