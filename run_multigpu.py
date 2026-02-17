@@ -64,6 +64,7 @@ def main(args: DictConfig):
         setup_wandb(args)
         best_val_objs = []
         test_gaps = []
+        test_vios = []
         test_objgaps = []
 
     torch.cuda.set_device(local_rank)
@@ -87,11 +88,12 @@ def main(args: DictConfig):
         for epoch in range(args.train.epoch):
             train_sampler.set_epoch(epoch)
             train_loss = trainer.train(train_loader, model, optimizer, local_rank)
-            val_gap, val_obj_gap = trainer.eval(val_loader, model, local_rank)
+            val_gap, val_obj_gap, val_vio = trainer.eval(val_loader, model, local_rank)
 
             dist.all_reduce(train_loss, op=dist.ReduceOp.AVG)
             dist.all_reduce(val_gap, op=dist.ReduceOp.AVG)
             dist.all_reduce(val_obj_gap, op=dist.ReduceOp.AVG)
+            dist.all_reduce(val_vio, op=dist.ReduceOp.AVG)
 
             val_gap = val_gap.item()
             if scheduler is not None:
@@ -112,6 +114,7 @@ def main(args: DictConfig):
             if rank == 0:
                 stats_dict = {'train_loss': train_loss,
                               'val_gap': val_gap,
+                              'val_vio': val_vio,
                               'val_obj_gap': val_obj_gap,
                               'lr': scheduler.optimizer.param_groups[0]["lr"]}
                 wandb.log(stats_dict)
@@ -119,7 +122,7 @@ def main(args: DictConfig):
 
         dist.barrier()
         model.load_state_dict(best_model)
-        test_gap, test_obj_gap = trainer.eval(test_loader, model, local_rank)
+        test_gap, test_obj_gap, test_vio = trainer.eval(test_loader, model, local_rank)
 
         dist.all_reduce(test_gap, op=dist.ReduceOp.AVG)
         dist.all_reduce(test_obj_gap, op=dist.ReduceOp.AVG)
@@ -131,6 +134,7 @@ def main(args: DictConfig):
             best_val_objs.append(trainer.best_objgap)
             test_objgaps.append(test_obj_gap)
             test_gaps.append(test_gap)
+            test_vios.append(test_vio)
 
     if rank == 0:
         wandb.log({
@@ -138,7 +142,8 @@ def main(args: DictConfig):
             'best_val_obj_gap': np.mean(best_val_objs),
             'test_gap_mean': np.mean(test_gaps),
             'test_gap_std': np.std(test_gaps),
-
+            'test_vio_mean': np.mean(test_vios),
+            'test_vio_std': np.std(test_vios),
             'test_obj_gap_mean': np.mean(test_objgaps),
             'test_obj_gap_std': np.std(test_objgaps),
         })

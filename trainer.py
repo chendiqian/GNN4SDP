@@ -191,7 +191,7 @@ class SSLDualTrainer:
 
             pred_dual, eigvals = model(data)
             loss = -scatter(pred_dual * data.b, data.batch_dict['cons'], dim=0, reduce='sum').mean() \
-                   + (torch.minimum(eigvals, torch.zeros_like(eigvals)) ** 2).sum(1).mean(0)
+                   + (torch.minimum(eigvals, torch.zeros_like(eigvals)) ** 2).sum(1).mean(0) * self.lamb
 
             train_losses += loss.detach() * data.num_graphs
             num_graphs += data.num_graphs
@@ -212,10 +212,11 @@ class SSLDualTrainer:
         val_objs = 0.
         num_graphs = 0
         objgaps = 0.
+        psd_vio = 0.
         for i, data in enumerate(dataloader):
             data = data.to(device)
 
-            pred_dual, _ = model(data)
+            pred_dual, eigvals = model(data)
             num_graphs += data.num_graphs
 
             # quick evaluation
@@ -225,4 +226,6 @@ class SSLDualTrainer:
             objgaps += obj_gap.sum()
             val_objs = obj_pred.sum()
 
-        return val_objs / num_graphs, objgaps / num_graphs
+            psd_vio += (torch.minimum(eigvals, torch.zeros_like(eigvals)) ** 2).sum()
+
+        return val_objs / num_graphs, objgaps / num_graphs, psd_vio / num_graphs
