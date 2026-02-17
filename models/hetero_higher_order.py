@@ -7,6 +7,7 @@ from torch_geometric.typing import EdgeType, NodeType
 from torch_geometric.utils import to_dense_batch
 
 from models.util import need_padding
+from models.ign_21 import Layer2to1
 
 
 class SpatialLayerNorm(torch.nn.Module):
@@ -125,14 +126,7 @@ class HigherOrder(torch.nn.Module):
         if not no_wl:
             self.init_higher_order_norms(num_conv_layers, hid_dim)
 
-        # higher order NN is defined in separate instantiations!
-        self.predictor = MLP([hid_dim] * num_pred_layers + [1], act=act, norm=None)
-        # self.predictor2 = None
-        # self.predictor3 = None
-        # if not no_dual:
-        #     assert not no_mp, "Require message passing to predict slack variable!"
-        #     self.predictor2 = MLP([hid_dim] * num_pred_layers + [1], act=act, norm=None)
-        #     self.predictor3 = MLP([hid_dim] * num_pred_layers + [1], act=act, norm=None)
+        self.predictor = Layer2to1(hid_dim, 1, num_pred_layers, act)
 
     def init_higher_order_layers(self, *args, **kwargs):
         raise NotImplementedError
@@ -224,12 +218,7 @@ class HigherOrder(torch.nn.Module):
             if self.gcns:
                 vals, cons = self.gcns[i](cons, vals, batch_dict, edge_index_dict, edge_attr_dict)
 
-        # pred_primal = self.predictor(vals).squeeze()
-        # pred_slack = self.predictor2(vals).squeeze() if self.predictor2 else None
-
         vals = vals.reshape(B, N, N, -1)
-        duals = torch.diagonal(vals, dim1=1, dim2=2)
-        duals = duals.reshape(B * N, vals.shape[-1])
+        pred_dual = self.predictor(vals).reshape(-1)
 
-        pred_dual = self.predictor(duals).squeeze()
         return pred_dual
