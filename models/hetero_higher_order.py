@@ -97,6 +97,7 @@ class HigherOrder(torch.nn.Module):
                  no_wl,
                  no_dual,
                  hid_dim,
+                 out_dim,
                  num_encode_layers,
                  num_conv_layers,
                  gnn_mlp_layers,
@@ -126,7 +127,7 @@ class HigherOrder(torch.nn.Module):
         if not no_wl:
             self.init_higher_order_norms(num_conv_layers, hid_dim)
 
-        self.predictor = Layer2to1(hid_dim, 1, num_pred_layers, act)
+        self.predictor = Layer2to1(hid_dim, out_dim, num_pred_layers, act)
 
     def init_higher_order_layers(self, *args, **kwargs):
         raise NotImplementedError
@@ -212,10 +213,13 @@ class HigherOrder(torch.nn.Module):
                 vals, cons = self.gcns[i](cons, vals, batch_dict, edge_index_dict, edge_attr_dict)
 
         vals = vals.reshape(B, N, N, -1)
-        pred_dual = self.predictor(vals).reshape(-1)
+        pred_primal_latent = self.predictor(vals)
+        pred_primal_latent = torch.nn.functional.normalize(pred_primal_latent, p=2, dim=2)
 
-        vals_encoding[edge_index_dict[('cons', 'to', 'vals')][1]] -= edge_attr_dict[('cons', 'to', 'vals')].squeeze() * pred_dual
-        C_minus_yA = vals_encoding.reshape(B, N, N)
-        eigvals = torch.linalg.eigvalsh(C_minus_yA)
+        pred_primal = torch.einsum('bnf,bmf->bnm', pred_primal_latent, pred_primal_latent)
 
-        return pred_dual, eigvals
+        # eigvals = torch.linalg.eigvalsh(pred_primal)
+        # assert eigvals.min() > -1.e-5
+        pred_primal = pred_primal.reshape(-1)
+
+        return pred_primal

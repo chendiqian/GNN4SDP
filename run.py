@@ -13,13 +13,13 @@ from tqdm import tqdm
 from data.collate_func import collate_fn_lp_base
 from data.dataset import LPDataset
 from models import get_model
-from trainer import PlainGNNTrainer
+from trainer import SSLPrimalTrainer
 from utils.experiment import save_run_config, setup_wandb, count_parameters
 
 torch.set_float32_matmul_precision('high')
 
 
-@hydra.main(version_base=None, config_path='./config', config_name="mpnn")
+@hydra.main(version_base=None, config_path='./config', config_name="ppgn")
 def main(args: DictConfig):
     log_folder_name = save_run_config(args)
     setup_wandb(args)
@@ -50,12 +50,9 @@ def main(args: DictConfig):
                              pin_memory=True)
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    best_val_objgaps = []
-    test_losses = []
+    best_val_objs = []
+    test_objs = []
     test_objgaps = []
-    psd_obj_gaps = []
-    test_vios = []
-    psd_vios = []
 
     for run in range(args.train.runs):
         model = get_model(args.gnn).to(device)
@@ -68,13 +65,13 @@ def main(args: DictConfig):
                                                          patience=int(args.train.patience * 0.6),
                                                          min_lr=1.e-5)
 
-        trainer = PlainGNNTrainer(args.train.accum)
+        trainer = SSLPrimalTrainer()
 
         pbar = tqdm(range(args.train.epoch))
         for epoch in pbar:
             train_loss = trainer.train(train_loader, model, optimizer, device).item()
-            val_loss, val_obj_gap, _, _, _ = trainer.eval(val_loader, model, device, False)
-            val_loss = val_loss.item()
+            val_obj, val_obj_gap = trainer.eval(val_loader, model, device)
+            val_obj = val_obj.item()
             val_obj_gap = val_obj_gap.item()
 
             if scheduler is not None:
@@ -93,7 +90,7 @@ def main(args: DictConfig):
                 break
 
             stats_dict = {'train_loss': train_loss,
-                          'val_loss': val_loss,
+                          'val_obj': val_obj,
                           'val_obj_gap': val_obj_gap,
                           'lr': scheduler.optimizer.param_groups[0]["lr"]}
 
@@ -101,30 +98,20 @@ def main(args: DictConfig):
             wandb.log(stats_dict)
 
         model.load_state_dict(best_model)
-        test_loss, test_obj_gap, psd_obj_gap, vio, psd_vio = trainer.eval(test_loader, model, device, True)
+        test_obj, test_obj_gap = trainer.eval(test_loader, model, device)
 
-        best_val_objgaps.append(trainer.best_objgap)
-        test_losses.append(test_loss.item())
+        best_val_objs.append(trainer.best_objgap)
+        test_objs.append(test_obj.item())
         test_objgaps.append(test_obj_gap.item())
-        psd_obj_gaps.append(psd_obj_gap.item())
-        test_vios.append(vio.item())
-        psd_vios.append(psd_vio.item())
 
     wandb.log({
         'num_params': count_parameters(model),
-        'best_val_obj_gap': np.mean(best_val_objgaps),
-        'test_loss_mean': np.mean(test_losses),
-        'test_loss_std': np.std(test_losses),
+        'best_val_obj': np.mean(best_val_objs),
+        'test_obj_mean': np.mean(test_objs),
+        'test_obj_std': np.std(test_objs),
 
         'test_obj_gap_mean': np.mean(test_objgaps),
         'test_obj_gap_std': np.std(test_objgaps),
-        'test_psd_obj_gap_mean': np.mean(psd_obj_gaps),
-        'test_psd_obj_gap_std': np.std(psd_obj_gaps),
-
-        'test_vio_mean': np.mean(test_vios),
-        'test_vio_std': np.std(test_vios),
-        'test_psd_vio_mean': np.mean(psd_vios),
-        'test_psd_vio_std': np.std(psd_vios),
     })
 
 
