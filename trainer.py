@@ -131,10 +131,11 @@ class SSLPrimalTrainer:
         for i, data in enumerate(dataloader):
             data = data.to(device)
 
-            pred = model(data)
+            pred, reg_loss = model(data)
             loss = scatter(pred[data['obj', 'to', 'vals'].edge_index[1]] *
                                data['obj', 'to', 'vals'].edge_attr.squeeze(1),
-                               data['obj', 'to', 'vals'].edge_index[0], dim=0, reduce='sum').mean()
+                               data['obj', 'to', 'vals'].edge_index[0], dim=0, reduce='sum').mean() + \
+                   reg_loss.mean() * 10.
 
             train_losses += loss.detach() * data.num_graphs
             num_graphs += data.num_graphs
