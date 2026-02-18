@@ -1,41 +1,29 @@
-import torch
 from torch_geometric.nn import MLP
+import torch.nn as nn
+import torch.nn.functional as F
 
 
-def contractions_2_to_1(inputs):
-    B, N, _, F = inputs.shape
-    diag_indices = torch.arange(N, device=inputs.device)
-
-    diag_part = inputs[:, diag_indices, diag_indices, :]  # B N F
-    sum_of_rows = torch.mean(inputs, dim=2)  # B N F
-    return torch.stack([diag_part, sum_of_rows], dim=0)
-
-
-class Layer2to1(torch.nn.Module):
+class Layer2to1(nn.Module):
     def __init__(self, input_depth, output_depth, mlp_layers, act):
         super().__init__()
 
-        basis_dimension = 2
+        self.mlp = MLP([input_depth] * mlp_layers + [input_depth], act=act, norm=None)
 
-        # initialization values for variables
-        self.coeffs = torch.nn.Parameter(
-            torch.empty(basis_dimension, input_depth, input_depth), requires_grad=True)
-        torch.nn.init.xavier_normal_(self.coeffs)
+        self.score_net = MLP([input_depth, input_depth, 1], act='tanh', norm=None)
 
-        # bias
-        self.all_bias = torch.nn.Parameter(torch.zeros(1, 1, input_depth))
+        self.out_proj = nn.Linear(input_depth, output_depth)
 
-        self.mlp = MLP([input_depth] * mlp_layers + [output_depth], act=act, norm=None)
+    def forward(self, pairwise_embeddings):
+        # input is 4D (Batch, N, N, F)
+        pairwise_embeddings = self.mlp(pairwise_embeddings)
 
-    def forward(self, inputs, *args, **kwargs):
-        """
-        :param inputs: N x m x m x D tensor
-        :return: output: N x m x S tensor
-        """
-        ops_out = contractions_2_to_1(inputs)
-        output = torch.einsum('dfh,dbnf->bnh', self.coeffs, ops_out)
+        B, N, _, F_dim = pairwise_embeddings.shape
 
-        # bias
-        output = output + self.all_bias
+        scores = self.score_net(pairwise_embeddings)
+        alpha = F.softmax(scores, dim=2)
+        weighted_features = alpha * pairwise_embeddings
 
-        return self.mlp(torch.relu(output))
+        L_node = weighted_features.sum(dim=2)
+
+        L_out = self.out_proj(L_node)
+        return L_out
