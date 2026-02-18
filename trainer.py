@@ -157,7 +157,7 @@ class SSLPrimalTrainer:
         for i, data in enumerate(dataloader):
             data = data.to(device)
 
-            pred = model(data)
+            pred, _ = model(data)
             num_graphs += data.num_graphs
 
             # quick evaluation
