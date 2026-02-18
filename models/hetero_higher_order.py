@@ -219,15 +219,15 @@ class HigherOrder(torch.nn.Module):
 
         pred_primal = torch.einsum('bnf,bmf->bnm', pred_primal_latent, pred_primal_latent)
 
-        _, N, F = pred_primal_latent.shape
-        L_centered = pred_primal_latent - pred_primal_latent.mean(dim=1, keepdim=True)
-
-        cov_matrix = torch.einsum('bnf,bnh->bfh', L_centered, L_centered) / N
-        triu = torch.triu_indices(F, F, device=cov_matrix.device)
-        reg_loss = (cov_matrix[:, triu[0], triu[1]] ** 2).sum(1)
+        # _, N, F = pred_primal_latent.shape
+        # L_centered = pred_primal_latent - pred_primal_latent.mean(dim=1, keepdim=True)
+        #
+        # cov_matrix = torch.einsum('bnf,bnh->bfh', L_centered, L_centered) / N
+        # triu = torch.triu_indices(F, F, device=cov_matrix.device)
+        # reg_loss = (cov_matrix[:, triu[0], triu[1]] ** 2).sum(1)
 
         # eigvals = torch.linalg.eigvalsh(pred_primal)
         # assert eigvals.min() > -1.e-5
         pred_primal = pred_primal.reshape(-1)
 
-        return pred_primal, reg_loss
+        return pred_primal
