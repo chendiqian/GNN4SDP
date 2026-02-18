@@ -166,6 +166,6 @@ class SSLPrimalTrainer:
             obj_gt = data.obj_solution
             obj_gap = (obj_pred - obj_gt).abs() / obj_gt.abs()
             objgaps += obj_gap.sum()
-            val_objs = obj_pred.sum()
+            val_objs += obj_pred.sum()
 
         return val_objs / num_graphs, objgaps / num_graphs
