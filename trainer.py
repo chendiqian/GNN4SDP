@@ -19,7 +19,7 @@ class PlainGNNTrainer:
         for i, data in enumerate(dataloader):
             data = data.to(device)
 
-            pred_y, pred_S, M, N = model(data)
+            pred_y, pred_S, _ = model(data)
             loss = ((pred_S.reshape(-1) - data.dual_solution) ** 2).mean() \
                    + ((pred_y.reshape(-1) - data.y_solution) ** 2).mean()
 
@@ -45,7 +45,14 @@ class PlainGNNTrainer:
         for i, data in enumerate(dataloader):
             data = data.to(device)
 
-            pred_y, pred_S, M, N = model(data)
+            pred_y, pred_S, C = model(data)
+
+            # in the solver it is C + y - S = 0
+            C_minus_y_minus_S = C + torch.diag_embed(pred_y, dim1=1, dim2=2) - pred_S
+            # C - y - S - M + N = 0
+            M = torch.relu(C_minus_y_minus_S)
+            N = torch.relu(-C_minus_y_minus_S)
+
             loss = ((pred_S.reshape(-1) - data.dual_solution) ** 2).mean() \
                    + ((pred_y.reshape(-1) - data.y_solution) ** 2).mean()
 
@@ -75,7 +82,13 @@ class SSLDualTrainer:
         for i, data in enumerate(dataloader):
             data = data.to(device)
 
-            y, S, M, N = model(data)
+            y, S, C = model(data)
+
+            C_minus_y_minus_S = C - torch.diag_embed(y, dim1=1, dim2=2) - S
+            # C - y - S - M + N = 0
+            M = torch.relu(C_minus_y_minus_S)
+            N = torch.relu(-C_minus_y_minus_S)
+
             loss = -y.sum(1) + M.sum((1, 2)) + N.sum((1, 2))
 
             train_losses += loss.detach().sum()
@@ -98,7 +111,13 @@ class SSLDualTrainer:
         for i, data in enumerate(dataloader):
             data = data.to(device)
 
-            y, S, M, N = model(data)
+            y, S, C = model(data)
+
+            C_minus_y_minus_S = C - torch.diag_embed(y, dim1=1, dim2=2) - S
+            # C - y - S - M + N = 0
+            M = torch.relu(C_minus_y_minus_S)
+            N = torch.relu(-C_minus_y_minus_S)
+
             obj_pred = y.sum(1) - M.sum((1, 2)) - N.sum((1, 2))
             num_graphs += data.num_graphs
 

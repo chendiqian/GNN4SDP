@@ -225,11 +225,7 @@ class HigherOrder(torch.nn.Module):
         pred_y = self.predictor2(cons).reshape(B, N)
 
         batched_C = vals_encoding.reshape(B, N, N)
-        C_minus_y_minus_S = batched_C - torch.diag_embed(pred_y, dim1=1, dim2=2) - pred_S
-        # C - y - S - M + N = 0
-        M = torch.relu(C_minus_y_minus_S)
-        N = torch.relu(-C_minus_y_minus_S)
 
         # print(pred_S[0])
 
-        return pred_y, pred_S, M, N
+        return pred_y, pred_S, batched_C
