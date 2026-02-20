@@ -155,7 +155,7 @@ class SSLDualTrainer:
             data = data.to(device)
 
             y, M, N = model(data)
-            obj_pred = -y.sum(1) + M.sum((1, 2)) + N.sum((1, 2))
+            obj_pred = y.sum(1) - M.sum((1, 2)) - N.sum((1, 2))
             num_graphs += data.num_graphs
 
             # quick evaluation
@@ -163,5 +163,7 @@ class SSLDualTrainer:
             obj_gap = (obj_pred - obj_gt).abs() / obj_gt.abs()
             objgaps += obj_gap.sum()
             val_objs += obj_pred.sum()
+
+        # print(torch.mean(M.sum((1, 2)) + N.sum((1, 2))).item())
 
         return val_objs / num_graphs, objgaps / num_graphs
