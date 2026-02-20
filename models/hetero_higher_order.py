@@ -215,7 +215,6 @@ class HigherOrder(torch.nn.Module):
 
         vals = vals.reshape(B, N, N, -1)
         pred_s_latent = self.predictor(vals)
-        pred_s_latent = torch.nn.functional.normalize(pred_s_latent, p=2, dim=2)
 
         pred_S = torch.einsum('bnf,bmf->bnm', pred_s_latent, pred_s_latent)
         pred_y = self.predictor2(vals).squeeze(-1)
