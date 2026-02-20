@@ -118,7 +118,7 @@ class PlainGNNTrainer:
         return val_losses / num_graphs, objgaps / num_graphs, projected_objgaps, val_violations / num_graphs, projected_vios
 
 
-class SSLPrimalTrainer:
+class SSLDualTrainer:
     def __init__(self):
         self.best_objgap = 1.e8
         self.patience = 0
@@ -131,15 +131,14 @@ class SSLPrimalTrainer:
         for i, data in enumerate(dataloader):
             data = data.to(device)
 
-            pred = model(data)
-            loss = scatter(pred[data['obj', 'to', 'vals'].edge_index[1]] *
-                               data['obj', 'to', 'vals'].edge_attr.squeeze(1),
-                               data['obj', 'to', 'vals'].edge_index[0], dim=0, reduce='sum').mean()
-            train_losses += loss.detach() * data.num_graphs
+            y, M, N = model(data)
+            loss = -y.sum(1) + M.sum((1, 2)) + N.sum((1, 2))
+
+            train_losses += loss.detach().sum()
             num_graphs += data.num_graphs
 
             optimizer.zero_grad()
-            loss.backward()
+            loss.mean().backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0, error_if_nonfinite=True)
             optimizer.step()
 
@@ -155,13 +154,11 @@ class SSLPrimalTrainer:
         for i, data in enumerate(dataloader):
             data = data.to(device)
 
-            pred = model(data)
+            y, M, N = model(data)
+            obj_pred = -y.sum(1) + M.sum((1, 2)) + N.sum((1, 2))
             num_graphs += data.num_graphs
 
             # quick evaluation
-            obj_pred = scatter(pred[data['obj', 'to', 'vals'].edge_index[1]] *
-                               data['obj', 'to', 'vals'].edge_attr.squeeze(1),
-                               data['obj', 'to', 'vals'].edge_index[0], dim=0, reduce='sum')
             obj_gt = data.obj_solution
             obj_gap = (obj_pred - obj_gt).abs() / obj_gt.abs()
             objgaps += obj_gap.sum()

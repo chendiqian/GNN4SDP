@@ -16,7 +16,7 @@ from torch.utils.data.distributed import DistributedSampler
 from data.collate_func import collate_fn_lp_base
 from data.dataset import LPDataset
 from models import get_model
-from trainer import SSLPrimalTrainer
+from trainer import SSLDualTrainer
 from utils.experiment import save_run_config, setup_wandb, count_parameters
 
 torch.set_float32_matmul_precision('high')
@@ -82,7 +82,7 @@ def main(args: DictConfig):
                                                          patience=int(args.train.patience * 0.6),
                                                          min_lr=1.e-5)
 
-        trainer = SSLPrimalTrainer()
+        trainer = SSLDualTrainer()
 
         for epoch in range(args.train.epoch):
             train_sampler.set_epoch(epoch)

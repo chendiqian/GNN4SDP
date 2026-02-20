@@ -13,7 +13,7 @@ from tqdm import tqdm
 from data.collate_func import collate_fn_lp_base
 from data.dataset import LPDataset
 from models import get_model
-from trainer import SSLPrimalTrainer
+from trainer import SSLDualTrainer
 from utils.experiment import save_run_config, setup_wandb, count_parameters
 
 torch.set_float32_matmul_precision('high')
@@ -65,7 +65,7 @@ def main(args: DictConfig):
                                                          patience=int(args.train.patience * 0.6),
                                                          min_lr=1.e-5)
 
-        trainer = SSLPrimalTrainer()
+        trainer = SSLDualTrainer()
 
         pbar = tqdm(range(args.train.epoch))
         for epoch in pbar:

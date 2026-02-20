@@ -1,4 +1,3 @@
-import pdb
 from typing import Dict, Tuple
 
 import torch
@@ -129,6 +128,7 @@ class HigherOrder(torch.nn.Module):
             self.init_higher_order_norms(num_conv_layers, hid_dim)
 
         self.predictor = Layer2to1(hid_dim, out_dim, num_pred_layers, act)
+        self.predictor2 = Layer2to1(hid_dim, 1, num_pred_layers, act)
 
     def init_higher_order_layers(self, *args, **kwargs):
         raise NotImplementedError
@@ -214,20 +214,16 @@ class HigherOrder(torch.nn.Module):
                 vals, cons = self.gcns[i](cons, vals, batch_dict, edge_index_dict, edge_attr_dict)
 
         vals = vals.reshape(B, N, N, -1)
-        pred_primal_latent = self.predictor(vals)
-        pred_primal_latent = torch.nn.functional.normalize(pred_primal_latent, p=2, dim=2)
+        pred_s_latent = self.predictor(vals)
+        pred_s_latent = torch.nn.functional.normalize(pred_s_latent, p=2, dim=2)
 
-        pred_primal = torch.einsum('bnf,bmf->bnm', pred_primal_latent, pred_primal_latent)
+        pred_S = torch.einsum('bnf,bmf->bnm', pred_s_latent, pred_s_latent)
+        pred_y = self.predictor2(vals).squeeze(-1)
 
-        # _, N, F = pred_primal_latent.shape
-        # L_centered = pred_primal_latent - pred_primal_latent.mean(dim=1, keepdim=True)
-        #
-        # cov_matrix = torch.einsum('bnf,bnh->bfh', L_centered, L_centered) / N
-        # triu = torch.triu_indices(F, F, device=cov_matrix.device)
-        # reg_loss = (cov_matrix[:, triu[0], triu[1]] ** 2).sum(1)
+        batched_C = vals_encoding.reshape(B, N, N)
+        C_minus_y_minus_S = batched_C - torch.diag_embed(pred_y, dim1=1, dim2=2) - pred_S
+        # C - y - S - M + N = 0
+        M = torch.relu(C_minus_y_minus_S)
+        N = torch.relu(-C_minus_y_minus_S)
 
-        # eigvals = torch.linalg.eigvalsh(pred_primal)
-        # assert eigvals.min() > -1.e-5
-        pred_primal = pred_primal.reshape(-1)
-
-        return pred_primal
+        return pred_y, M, N
