@@ -127,8 +127,8 @@ class HigherOrder(torch.nn.Module):
         if not no_wl:
             self.init_higher_order_norms(num_conv_layers, hid_dim)
 
-        # self.predictor2 = Layer2to1(hid_dim, 1, num_pred_layers, act)
-        self.predictor = MLP([hid_dim] * num_pred_layers + [1], act=act, norm=None)
+        self.predictor = Layer2to1(hid_dim, 1, num_pred_layers, act)
+        # self.predictor = MLP([hid_dim] * num_pred_layers + [1], act=act, norm=None)
 
     def init_higher_order_layers(self, *args, **kwargs):
         raise NotImplementedError
@@ -213,6 +213,7 @@ class HigherOrder(torch.nn.Module):
             if self.gcns:
                 vals, cons = self.gcns[i](cons, vals, batch_dict, edge_index_dict, edge_attr_dict)
 
+        vals = vals.reshape(B, N, N, -1)
         # pred_s_latent = self.predictor(vals).squeeze(-1)
 
         # L, Q = torch.linalg.eigh(pred_s_latent)
@@ -220,7 +221,7 @@ class HigherOrder(torch.nn.Module):
         # pred_S = (Q * L_new[:, None, :]) @ Q.transpose(-1, -2)
 
         # pred_S = torch.einsum('bnf,bmf->bnm', pred_s_latent, pred_s_latent)
-        pred_y = self.predictor(cons).reshape(B, N)
+        pred_y = self.predictor(vals).reshape(B, N)
 
         batched_C = vals_encoding.reshape(B, N, N)
 
