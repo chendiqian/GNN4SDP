@@ -77,7 +77,7 @@ def main(args: DictConfig):
 
         optimizer = optim.Adam(model.parameters(), lr=args.train.lr, weight_decay=args.train.weight_decay)
         scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer,
-                                                         mode='min',
+                                                         mode='max',
                                                          factor=0.5,
                                                          patience=int(args.train.patience * 0.6),
                                                          min_lr=1.e-5)
@@ -97,9 +97,9 @@ def main(args: DictConfig):
             if scheduler is not None:
                 scheduler.step(val_obj)
 
-            if trainer.best_objgap > val_obj:
+            if trainer.best_obj < val_obj:
                 trainer.patience = 0
-                trainer.best_objgap = val_obj
+                trainer.best_obj = val_obj
                 best_model = copy.deepcopy(model.state_dict())
                 if args.train.ckpt and rank == 0:
                     torch.save(model.module.state_dict(), os.path.join(log_folder_name, f'best_model{run}.pt'))
@@ -128,7 +128,7 @@ def main(args: DictConfig):
         test_obj = test_obj.item()
 
         if rank == 0:
-            best_val_objs.append(trainer.best_objgap)
+            best_val_objs.append(trainer.best_obj)
             test_objgaps.append(test_obj_gap)
             test_objs.append(test_obj)
 

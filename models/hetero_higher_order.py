@@ -127,9 +127,8 @@ class HigherOrder(torch.nn.Module):
         if not no_wl:
             self.init_higher_order_norms(num_conv_layers, hid_dim)
 
-        self.predictor = MLP([hid_dim] * num_pred_layers + [1], act=act, norm=None)
         # self.predictor2 = Layer2to1(hid_dim, 1, num_pred_layers, act)
-        # self.predictor2 = MLP([hid_dim] * num_pred_layers + [1], act=act, norm=None)
+        self.predictor = MLP([hid_dim] * num_pred_layers + [1], act=act, norm=None)
 
     def init_higher_order_layers(self, *args, **kwargs):
         raise NotImplementedError
@@ -214,20 +213,22 @@ class HigherOrder(torch.nn.Module):
             if self.gcns:
                 vals, cons = self.gcns[i](cons, vals, batch_dict, edge_index_dict, edge_attr_dict)
 
-        vals = vals.reshape(B, N, N, -1)
-        pred_s_latent = self.predictor(vals).squeeze(-1)
+        # pred_s_latent = self.predictor(vals).squeeze(-1)
 
-        L, Q = torch.linalg.eigh(pred_s_latent)
-        L_new = torch.clamp(L, min=0.)
-        pred_S = (Q * L_new[:, None, :]) @ Q.transpose(-1, -2)
+        # L, Q = torch.linalg.eigh(pred_s_latent)
+        # L_new = torch.clamp(L, min=0.)
+        # pred_S = (Q * L_new[:, None, :]) @ Q.transpose(-1, -2)
 
         # pred_S = torch.einsum('bnf,bmf->bnm', pred_s_latent, pred_s_latent)
-        # pred_y = self.predictor2(cons).reshape(B, N)
+        pred_y = self.predictor(cons).reshape(B, N)
 
         batched_C = vals_encoding.reshape(B, N, N)
 
-        # print(pred_S[0])
-
-        pred_y = torch.diagonal(batched_C - pred_S, dim1=1, dim2=2)
+        pred_S = batched_C - torch.diag_embed(pred_y, dim1=1, dim2=2)
+        eigvals = torch.linalg.eigvalsh(pred_S)
+        delta = torch.min(eigvals, dim=1).values
+        delta = torch.clamp(-delta, min=0.)
+        pred_y = pred_y - delta[:, None]
+        pred_S = batched_C - torch.diag_embed(pred_y, dim1=1, dim2=2)
 
         return pred_y, pred_S, batched_C

@@ -71,7 +71,7 @@ class PlainGNNTrainer:
 
 class SSLDualTrainer:
     def __init__(self):
-        self.best_objgap = 1.e8
+        self.best_obj = -1.e8
         self.patience = 0
 
     def train(self, dataloader, model, optimizer, device):
@@ -84,12 +84,12 @@ class SSLDualTrainer:
 
             y, S, C = model(data)
 
-            C_minus_y_minus_S = C - torch.diag_embed(y, dim1=1, dim2=2) - S
-            # C - y - S - M + N = 0
-            M = torch.relu(C_minus_y_minus_S)
-            N = torch.relu(-C_minus_y_minus_S)
+            # C_minus_y_minus_S = C - torch.diag_embed(y, dim1=1, dim2=2) - S
+            # # C - y - S - M + N = 0
+            # M = torch.relu(C_minus_y_minus_S)
+            # N = torch.relu(-C_minus_y_minus_S)
 
-            loss = -y.sum(1) + M.sum((1, 2)) + N.sum((1, 2))
+            loss = -y.sum(1)
 
             train_losses += loss.detach().sum()
             num_graphs += data.num_graphs
@@ -113,12 +113,12 @@ class SSLDualTrainer:
 
             y, S, C = model(data)
 
-            C_minus_y_minus_S = C - torch.diag_embed(y, dim1=1, dim2=2) - S
-            # C - y - S - M + N = 0
-            M = torch.relu(C_minus_y_minus_S)
-            N = torch.relu(-C_minus_y_minus_S)
+            # C_minus_y_minus_S = C - torch.diag_embed(y, dim1=1, dim2=2) - S
+            # # C - y - S - M + N = 0
+            # M = torch.relu(C_minus_y_minus_S)
+            # N = torch.relu(-C_minus_y_minus_S)
 
-            obj_pred = y.sum(1) - M.sum((1, 2)) - N.sum((1, 2))
+            obj_pred = y.sum(1)
             num_graphs += data.num_graphs
 
             # quick evaluation
