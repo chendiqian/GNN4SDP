@@ -5,7 +5,6 @@ def get_model(args):
                  no_wl=False,
                  no_dual=args.no_dual,
                  hid_dim=args.hidden,
-                 out_dim=args.out_dim,
                  num_encode_layers=args.num_encode_layers,
                  num_conv_layers=args.num_conv_layers,
                  gnn_mlp_layers=args.gnn_mlp_layers,

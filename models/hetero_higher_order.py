@@ -97,7 +97,6 @@ class HigherOrder(torch.nn.Module):
                  no_wl,
                  no_dual,
                  hid_dim,
-                 out_dim,
                  num_encode_layers,
                  num_conv_layers,
                  gnn_mlp_layers,

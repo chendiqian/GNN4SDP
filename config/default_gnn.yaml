@@ -2,7 +2,6 @@ gnn:
   no_mp: true   # by default we use mp
   no_dual: true   # whether to predict slack variables
   hidden: 96
-  out_dim: 128
   num_encode_layers: 2  # this is encoding V and C nodes
   num_conv_layers: 6
   gnn_mlp_layers: 1   # this can be fixed
