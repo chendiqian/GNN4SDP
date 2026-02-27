@@ -1,5 +1,5 @@
 gnn:
-  no_mp: false   # by default we use mp
+  no_mp: true   # by default we use mp
   no_dual: true   # whether to predict slack variables
   hidden: 96
   out_dim: 128
