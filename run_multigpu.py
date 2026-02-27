@@ -22,7 +22,7 @@ from utils.experiment import save_run_config, setup_wandb, count_parameters
 torch.set_float32_matmul_precision('high')
 
 
-@hydra.main(version_base=None, config_path='./config', config_name="mpnn")
+@hydra.main(version_base=None, config_path='./config', config_name="ppgn")
 def main(args: DictConfig):
     world_size = int(os.environ['WORLD_SIZE'])  # Total number of processes
     rank = int(os.environ['RANK'])  # Rank of the current process
