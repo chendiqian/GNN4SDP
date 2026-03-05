@@ -1,4 +1,5 @@
 import torch
+from torch_scatter import scatter
 
 
 class SSLDualTrainer:
@@ -60,5 +61,57 @@ class SSLDualTrainer:
             val_objs += obj_pred.sum()
 
         # print(torch.mean(M.sum((1, 2)) + N.sum((1, 2))).item())
+
+        return val_objs / num_graphs, objgaps / num_graphs
+
+
+class SSLPrimalTrainer:
+    def __init__(self):
+        self.best_obj = 1.e8
+        self.patience = 0
+
+    def train(self, dataloader, model, optimizer, device):
+        model.train()
+
+        train_losses = 0.
+        num_graphs = 0
+        for i, data in enumerate(dataloader):
+            data = data.to(device)
+
+            pred = model(data)
+            loss = scatter(pred[data['obj', 'to', 'vals'].edge_index[1]] *
+                               data['obj', 'to', 'vals'].edge_attr.squeeze(1),
+                               data['obj', 'to', 'vals'].edge_index[0], dim=0, reduce='sum').mean()
+            train_losses += loss.detach() * data.num_graphs
+            num_graphs += data.num_graphs
+
+            optimizer.zero_grad()
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0, error_if_nonfinite=True)
+            optimizer.step()
+
+        return train_losses / num_graphs
+
+    @torch.no_grad()
+    def eval(self, dataloader, model, device):
+        model.eval()
+
+        val_objs = 0.
+        num_graphs = 0
+        objgaps = 0.
+        for i, data in enumerate(dataloader):
+            data = data.to(device)
+
+            pred = model(data)
+            num_graphs += data.num_graphs
+
+            # quick evaluation
+            obj_pred = scatter(pred[data['obj', 'to', 'vals'].edge_index[1]] *
+                               data['obj', 'to', 'vals'].edge_attr.squeeze(1),
+                               data['obj', 'to', 'vals'].edge_index[0], dim=0, reduce='sum')
+            obj_gt = data.obj_solution
+            obj_gap = (obj_pred - obj_gt).abs() / obj_gt.abs()
+            objgaps += obj_gap.sum()
+            val_objs += obj_pred.sum()
 
         return val_objs / num_graphs, objgaps / num_graphs
