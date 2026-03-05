@@ -4,6 +4,7 @@ def get_model(args):
     model = PPGN(no_mp=args.no_mp,
                  no_wl=False,
                  no_dual=args.no_dual,
+                 target=args.target,
                  hid_dim=args.hidden,
                  num_encode_layers=args.num_encode_layers,
                  num_conv_layers=args.num_conv_layers,

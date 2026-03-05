@@ -13,7 +13,7 @@ from tqdm import tqdm
 from data.collate_func import collate_fn_lp_base
 from data.dataset import LPDataset
 from models import get_model
-from trainer import SSLDualTrainer
+from trainer import SSLDualTrainer, SSLPrimalTrainer, SSLPrimalDualTrainer
 from utils.experiment import save_run_config, setup_wandb, count_parameters
 
 torch.set_float32_matmul_precision('high')
@@ -60,12 +60,18 @@ def main(args: DictConfig):
 
         optimizer = optim.Adam(model.parameters(), lr=args.train.lr, weight_decay=args.train.weight_decay)
         scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer,
-                                                         mode='max',
+                                                         mode='max' if 'dual' in args.gnn.target else 'min',
                                                          factor=0.5,
                                                          patience=int(args.train.patience * 0.6),
                                                          min_lr=1.e-5)
-
-        trainer = SSLDualTrainer()
+        if args.gnn.target == 'dual':
+            trainer = SSLDualTrainer()
+        elif args.gnn.target == 'primal':
+            trainer = SSLPrimalTrainer()
+        elif args.gnn.target == 'primal+dual':
+            trainer = SSLPrimalDualTrainer()
+        else:
+            raise ValueError
 
         pbar = tqdm(range(args.train.epoch))
         for epoch in pbar:
@@ -77,14 +83,13 @@ def main(args: DictConfig):
             if scheduler is not None:
                 scheduler.step(val_obj_gap)
 
-            if trainer.best_obj < val_obj:
-                trainer.patience = 0
-                trainer.best_obj = val_obj
+            # we must evaluate on obj value, because for SSL we have no access to obj gap, it's just for screening
+            trainer.step(val_obj)
+            if trainer.patience == 0:
+                # best model updated
                 best_model = copy.deepcopy(model.state_dict())
                 if args.train.ckpt:
                     torch.save(model.state_dict(), os.path.join(log_folder_name, f'best_model{run}.pt'))
-            else:
-                trainer.patience += 1
 
             if trainer.patience > args.train.patience:
                 break

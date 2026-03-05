@@ -1,4 +1,5 @@
 gnn:
+  target: dual   # primal / dual / primal+dual
   no_mp: true   # by default we use mp
   no_dual: true   # whether to predict slack variables
   hidden: 96

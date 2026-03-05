@@ -18,7 +18,6 @@ class PPGNBlock(torch.nn.Module):
         else:
             self.ln = torch.nn.Identity()
 
-    @torch.compile
     def forward(self, inputs, mask, *args, **kwargs):
         x1 = self.mlp1(inputs)
         x2 = self.mlp2(inputs)
@@ -41,6 +40,7 @@ class PPGN(HigherOrder):
                  no_mp,
                  no_wl,
                  no_dual,
+                 target,
                  hid_dim,
                  num_encode_layers,
                  num_conv_layers,
@@ -53,6 +53,7 @@ class PPGN(HigherOrder):
         super().__init__(no_mp,
                          no_wl,
                          no_dual,
+                         target,
                          hid_dim,
                          num_encode_layers,
                          num_conv_layers,
