@@ -107,8 +107,8 @@ def main(args: DictConfig):
             if trainer.patience == 0:
                 # best model updated
                 best_model = copy.deepcopy(model.state_dict())
-                if args.train.ckpt:
-                    torch.save(model.state_dict(), os.path.join(log_folder_name, f'best_model{run}.pt'))
+                if args.train.ckpt and rank == 0:
+                    torch.save(model.module.state_dict(), os.path.join(log_folder_name, f'best_model{run}.pt'))
 
             if trainer.patience > args.train.patience:
                 break
