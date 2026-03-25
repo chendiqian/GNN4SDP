@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader
 from data.collate_func import collate_fn_lp_base
 from data.dataset import LPDataset
 from models import get_model
-from trainer import SSLDualTrainer
+from trainer import SSLDualTrainer, SSLPrimalTrainer, SSLPrimalDualTrainer
 from utils.experiment import save_run_config, setup_wandb
 
 torch.set_float32_matmul_precision('high')
@@ -43,7 +43,15 @@ def main(args: DictConfig):
         model = get_model(args.gnn).to(device)
         state_dict = torch.load(os.path.join(args.train.modelpath, model_dict), map_location=device, weights_only=False)
         model.load_state_dict(state_dict)
-        trainer = SSLDualTrainer()
+
+        if args.gnn.target == 'dual':
+            trainer = SSLDualTrainer()
+        elif args.gnn.target == 'primal':
+            trainer = SSLPrimalTrainer()
+        elif args.gnn.target == 'primal+dual':
+            trainer = SSLPrimalDualTrainer()
+        else:
+            raise ValueError
 
         test_obj, test_obj_gap = trainer.eval(test_loader, model, device)
 
