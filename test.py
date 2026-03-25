@@ -12,7 +12,7 @@ from data.collate_func import collate_fn_lp_base
 from data.dataset import LPDataset
 from models import get_model
 from trainer import SSLDualTrainer, SSLPrimalTrainer, SSLPrimalDualTrainer
-from utils.experiment import save_run_config, setup_wandb
+from utils.experiment import save_run_config, setup_wandb, sync_timer
 
 torch.set_float32_matmul_precision('high')
 
@@ -33,14 +33,19 @@ def main(args: DictConfig):
                              pin_memory=True)
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    batch = next(iter(test_loader)).to(device)
+    model = get_model(args.gnn).to(device)
+    for _ in range(30):
+        _ = model(batch)
+
     test_objs = []
     test_obj_gaps = []
+    times = []
 
     model_dicts = os.listdir(args.train.modelpath)
     model_dicts = [m for m in model_dicts if m.startswith('best') and m.endswith('.pt')]
 
     for run, model_dict in enumerate(model_dicts):
-        model = get_model(args.gnn).to(device)
         state_dict = torch.load(os.path.join(args.train.modelpath, model_dict), map_location=device, weights_only=False)
         model.load_state_dict(state_dict)
 
@@ -55,6 +60,11 @@ def main(args: DictConfig):
 
         test_obj, test_obj_gap = trainer.eval(test_loader, model, device)
 
+        batch = next(iter(test_loader)).to(device)
+        t1 = sync_timer()
+        _ = model(batch)
+        times.append(sync_timer() - t1)
+
         test_objs.append(test_obj.item())
         test_obj_gaps.append(test_obj_gap.item())
 
@@ -63,6 +73,8 @@ def main(args: DictConfig):
         'test_obj_std': np.std(test_objs),
         'test_obj_gap_mean': np.mean(test_obj_gaps),
         'test_obj_gap_std': np.std(test_obj_gaps),
+        'time_mean': np.mean(times),
+        'time_std': np.std(times),
     }
 
     logger.info(', '.join([k + f':{v:.5f}' for k, v in stats.items()]))
