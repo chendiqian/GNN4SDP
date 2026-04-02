@@ -4,25 +4,22 @@ import wandb
 from omegaconf import DictConfig
 from tqdm import tqdm
 
-import juliapkg
-
-# 1. Add the required Julia packages to the Python sandbox
-juliapkg.add("JuMP")
-juliapkg.add("SDPLR")
-
-# 2. Resolve and install them (this might take a minute the very first time)
-juliapkg.resolve()
-
 # 3. Now it is safe to boot up the Julia runtime
 from juliacall import Main as jl
 
-jl.seval('using JuMP, SDPLR, LinearAlgebra')
+try:
+    jl.seval('using JuMP, SDPLR, LinearAlgebra')
+except:
+    jl.seval('''
+        import Pkg
+        Pkg.add("JuMP")
+        Pkg.add("SDPLR")
+    ''')
+    jl.seval('using JuMP, SDPLR, LinearAlgebra')
 
-import torch
+import torch.cuda
 from data.dataset import LPDataset
-from data.collate_func import collate_fn_lp_base
-from models import get_model
-from utils.evaluation import recover_sdp_from_data
+from utils.evaluation import recover_sdp_from_data, solve_sdp_scs
 from utils.experiment import setup_wandb
 import time
 
@@ -141,37 +138,51 @@ def main(args: DictConfig):
     if args.train.debug:
         test_set = test_set[:20]
 
+    use_gpu = True if torch.cuda.is_available() else False
     A, C, b = recover_sdp_from_data(test_set[0])
     for _ in range(5):
         # warm start
         _ = call_julia(C)
+        _ = solve_sdp_scs(C, A, b, gpu=use_gpu)
 
-    times = []
+    sdplr_times = []
+    scs_times = []
     obj_gaps = []
     vios = []
     pbar = tqdm(test_set)
     for data in pbar:
         A, C, b = recover_sdp_from_data(data)
-        n = C.shape[0]
-        m = b.shape[0]
+
+        # sdplr
         t1 = time.time()
         X, obj, vio = call_julia_general_sdp(C, A, b)
-        times.append(time.time() - t1)
-        obj_gt = data.obj_solution.cpu().numpy()[0]
-        obj_gaps.append(np.abs((obj - obj_gt) / (obj_gt + 1.e-5)))
+        sdplr_times.append(time.time() - t1)
         vios.append(vio)
 
-        pbar.set_postfix({'time': times[-1], 'gap': obj_gaps[-1], 'vio': vios[-1]})
+        # scs
+        t1 = time.time()
+        sol = solve_sdp_scs(C, A, b, gpu=use_gpu)[-1]
+        scs_times.append(time.time() - t1)
+
+        obj_gt = sol['info']['pobj']
+        obj_gaps.append(np.abs((obj - obj_gt) / (obj_gt + 1.e-5)))
+
+        pbar.set_postfix({'sdp': obj_gt, 'sdplr': obj, 'vio': vios[-1]})
 
     stats = {
-        'time_mean': np.mean(times),
-        'time_std': np.std(times),
+        'sdplr_time_mean': np.mean(sdplr_times),
+        'sdplr_time_std': np.std(sdplr_times),
+        'scs_time_mean': np.mean(scs_times),
+        'scs_time_std': np.std(scs_times),
         'gaps_mean': np.mean(obj_gaps),
         'gaps_std': np.std(obj_gaps),
         'vios_mean': np.mean(vios),
         'vios_std': np.std(vios),
     }
-    print(stats)
+    print(f'sdplr_time: {np.mean(sdplr_times):.3f}±{np.std(sdplr_times):.3f}, '
+          f'scs_time: {np.mean(scs_times):.3f}±{np.std(scs_times):.3f}, '
+          f'gap: {np.mean(obj_gaps)}±{np.std(obj_gaps):.3f}, '
+          f'vio: {np.mean(vios)}±{np.std(vios):.3f}')
     wandb.log(stats)
 
 
