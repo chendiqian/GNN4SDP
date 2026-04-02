@@ -1,6 +1,3 @@
-import pdb
-import os
-
 import hydra
 import numpy as np
 import wandb
@@ -73,41 +70,50 @@ def call_julia(C):
     # return objective_value
 
 
-def call_julia_warm(C, X):
-    # 1. Have Julia install the required solver packages (runs once)
-    # jl.seval('import Pkg; Pkg.add(["JuMP", "SDPLR"])')
+def call_julia_general_sdp(C, A, b):
+    """
+    Solves the general SDP:
+        min <C, X>
+        s.t. <A_i, X> = b_i  for i = 1..m
+             X >= 0 (PSD)
 
-    # 2. Import the Julia libraries into the Python runtime
+    Args:
+        C: np.ndarray of shape (n, n) representing the cost matrix
+        A: np.ndarray of shape (n, n, m) representing m constraint matrices
+        b: np.ndarray of shape (m,) representing constraint targets
+    """
+
+    # ---------------------------------------------------------
+    # Pass Data to Julia
+    # ---------------------------------------------------------
+    jl.C_julia = C
+    jl.A_julia = A
+    jl.b_julia = b
+
+    jl.n = C.shape[0]
+    jl.m = b.shape[0]
 
     # ---------------------------------------------------------
     # The Julia Optimization Block (Executed via Python)
     # ---------------------------------------------------------
-    # We pass the NumPy array to Julia by just assigning it
-    jl.C_julia = C
-    jl.n = C.shape[0]
-
-    # 2. Pass it to Julia
-    jl.X_warm = X
-
-    # We formulate and solve the problem using Julia syntax evaluated as a string
     jl.seval('''
+        # Convert Python objects to native Julia arrays for maximum JuMP performance
+        C_mat = convert(Array{Float64, 2}, C_julia)
+        A_mat = convert(Array{Float64, 3}, A_julia)
+        b_vec = convert(Array{Float64, 1}, b_julia)
+
         # Initialize the JuMP model with the SDPLR solver
         model = Model(SDPLR.Optimizer)
 
         # Define a symmetric PSD matrix variable X of size n x n
         @variable(model, X[1:n, 1:n], PSD)
 
-        # Example constraints: diagonals equal 1 (Max-Cut style)
-        @constraint(model, [i=1:n], X[i,i] == 1.0)
+        # Define the objective: minimize the inner product <C, X>
+        # Note: dot(C, X) is much faster than tr(C * X) because it avoids allocating a new matrix
+        @objective(model, Min, dot(C_mat, X))
 
-        # Define the objective: minimize <C, X>
-        @objective(model, Min, tr(C_julia * X))
-        
-        # WARM START THE SOLVER
-        # We loop through the matrix and set the initial values
-        for i in 1:n, j in 1:n
-            set_start_value(X[i,j], X_warm[i,j])
-        end
+        # Define the general affine constraints: <A_i, X> = b_i
+        @constraint(model, [i=1:m], dot(A_mat[:, :, i], X) == b_vec[i])
 
         # Solve it!
         optimize!(model)
@@ -119,13 +125,14 @@ def call_julia_warm(C, X):
     # ---------------------------------------------------------
     # Back to Python
     # ---------------------------------------------------------
-    # The resulting matrix is automatically converted back to a NumPy array
+    # Convert the Julia Array back into a native NumPy array
     X_opt_py = np.array(jl.X_opt_julia)
+    obj = (C * X_opt_py).sum()
+    vio = np.abs((A * X_opt_py[:, :, None]).sum((0, 1)) - b).mean()
+    return X_opt_py, obj, vio
 
-    # return objective_value
 
-
-@hydra.main(version_base=None, config_path='./config', config_name="ppgn")
+@hydra.main(version_base=None, config_path='./config', config_name="solver")
 def main(args: DictConfig):
     setup_wandb(args)
 
@@ -137,42 +144,32 @@ def main(args: DictConfig):
     A, C, b = recover_sdp_from_data(test_set[0])
     for _ in range(5):
         # warm start
-        call_julia(C)
-
-    use_gpu = torch.cuda.is_available()
-    device = 'cuda' if use_gpu else 'cpu'
-
-    model = get_model(args.gnn).to(device)
-    model_dicts = os.listdir(args.train.modelpath)
-    model_dicts = [m for m in model_dicts if m.startswith('best') and m.endswith('.pt')]
+        _ = call_julia(C)
 
     times = []
-    times_warm = []
-    for data in tqdm(test_set):
+    obj_gaps = []
+    vios = []
+    pbar = tqdm(test_set)
+    for data in pbar:
         A, C, b = recover_sdp_from_data(data)
         n = C.shape[0]
-        batch = collate_fn_lp_base([data]).to(device)
+        m = b.shape[0]
         t1 = time.time()
-        call_julia(C)
+        X, obj, vio = call_julia_general_sdp(C, A, b)
         times.append(time.time() - t1)
+        obj_gt = data.obj_solution.cpu().numpy()[0]
+        obj_gaps.append(np.abs((obj - obj_gt) / (obj_gt + 1.e-5)))
+        vios.append(vio)
 
-        for model_dict in model_dicts:
-            state_dict = torch.load(os.path.join(args.train.modelpath, model_dict), map_location=device, weights_only=False)
-            model.load_state_dict(state_dict)
-            model.eval()
-
-            pred_primal, pred_slack, pred_dual = model(batch)
-            x = pred_primal.detach().cpu().numpy().reshape(n, n)
-
-            t1 = time.time()
-            call_julia_warm(C, x)
-            times_warm.append(time.time() - t1)
+        pbar.set_postfix({'time': times[-1], 'gap': obj_gaps[-1], 'vio': vios[-1]})
 
     stats = {
         'time_mean': np.mean(times),
         'time_std': np.std(times),
-        'time_warm_mean': np.mean(times_warm),
-        'time_warm_std': np.std(times_warm),
+        'gaps_mean': np.mean(obj_gaps),
+        'gaps_std': np.std(obj_gaps),
+        'vios_mean': np.mean(vios),
+        'vios_std': np.std(vios),
     }
     print(stats)
     wandb.log(stats)
