@@ -63,8 +63,9 @@ def call_julia(C):
     # ---------------------------------------------------------
     # The resulting matrix is automatically converted back to a NumPy array
     X_opt_py = np.array(jl.X_opt_julia)
-
-    # return objective_value
+    obj = (C * X_opt_py).sum()
+    vio = np.abs(np.diagonal(X_opt_py) - 1.).mean()
+    return X_opt_py, obj, vio
 
 
 def call_julia_general_sdp(C, A, b):
