@@ -1,4 +1,4 @@
-# MPNN for general SDPs
+# On the Expressive Power of GNNs to Solve Linear SDPs
 
 ## Environment setup
 
